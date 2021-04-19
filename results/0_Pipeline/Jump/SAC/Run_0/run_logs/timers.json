@@ -1,0 +1,42 @@
+{
+    "name": "root",
+    "metadata": {
+        "timer_format_version": "0.1.0",
+        "start_time_seconds": "1618288612",
+        "python_version": "3.8.8 (default, Feb 24 2021, 15:54:32) [MSC v.1928 64 bit (AMD64)]",
+        "command_line_arguments": "C:\\Users\\user\\Anaconda3\\envs\\rlnav\\Scripts\\mlagents-learn rlnav/configs/SAC.yaml --env=C:\\Users\\user\\Desktop\\RLNav\\NavigationEnvironments\\P0\\Jump\\Env.exe --run-id=0_Pipeline\\Jump\\SAC\\Run_0 --time-scale=10 --base-port=6400 --width=480 --height=480",
+        "mlagents_version": "0.25.0",
+        "mlagents_envs_version": "0.25.0",
+        "communication_protocol_version": "1.5.0",
+        "pytorch_version": "1.8.1+cpu",
+        "numpy_version": "1.19.5",
+        "end_time_seconds": "1618288616"
+    },
+    "total": 3.8849827,
+    "count": 1,
+    "self": 0.01768580000000064,
+    "children": {
+        "run_training.setup": {
+            "total": 0.3386798,
+            "count": 1,
+            "self": 0.3386798
+        },
+        "TrainerController.start_learning": {
+            "total": 3.5286170999999995,
+            "count": 1,
+            "self": 0.0002723999999996174,
+            "children": {
+                "TrainerController._reset_env": {
+                    "total": 3.5279318,
+                    "count": 1,
+                    "self": 3.5279318
+                },
+                "TrainerController._save_models": {
+                    "total": 0.00041289999999971627,
+                    "count": 1,
+                    "self": 0.00041289999999971627
+                }
+            }
+        }
+    }
+}
