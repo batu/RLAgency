@@ -1,6 +1,8 @@
 [submodule "stable-baselines3"]
 	path = stable-baselines3
 	url = https://github.com/batu/stable-baselines3.git
+	branch = rlnav
 [submodule "ml-agents"]
 	path = ml-agents
 	url = https://github.com/batu/ml-agents.git
+	branch = main
