@@ -8,6 +8,7 @@ import json
 
 from typing import List, Optional, Tuple, Union
 from stable_baselines3.common.type_aliases import GymObs, GymStepReturn
+from collections import defaultdict, deque
 
 
 class WANDBMonitor(gym.Wrapper):
@@ -21,16 +22,13 @@ class WANDBMonitor(gym.Wrapper):
         if extra parameters are needed at reset
     :param info_keywords: extra information to log, from the information return of env.step()
     """
-
-    EXT = "monitor.csv"
-
-    
     episode_rewards = []
     episode_lengths = []
     episode_times = []
     printer_acquired = False
-    total_steps = 0
+    total_steps   = 0
     episode_count = 0
+    WANDB_logger = None
 
 
     def __init__(
@@ -52,9 +50,10 @@ class WANDBMonitor(gym.Wrapper):
         self.next_log_timestep = 0
         self.to_log = True
 
+        self.name_to_value = defaultdict(list)
         self.rewards = [list() for _ in range(self.num_agents)]
-        self.episode_rewards = []
-        self.episode_lengths = []
+        self.episode_rewards = deque([], 50)
+        self.episode_lengths = deque([], 50)
         self.episode_times = []
 
         self.max_obs = -np.inf
@@ -68,15 +67,19 @@ class WANDBMonitor(gym.Wrapper):
             self.printer = True
 
         self.current_reset_info = {}  # extra info about the current episode, that was passed in during reset()
-
+        WANDBMonitor.WANDB_logger = self
     
+    def record(self, key: str, value, exclude= None) -> None:
+        self.name_to_value[key].append(value) 
+        wandb.log({key:value},step=WANDBMonitor.total_steps)
+
     def log_to_console(self):
         if not self.printer: return
 
         time_elapsed = (time.time() - self.t_start)
         fps = int(self.total_steps / time_elapsed)
-        ep_rews = WANDBMonitor.episode_rewards[self.log_start_idx:]
-        ep_lens = WANDBMonitor.episode_lengths[self.log_start_idx:]
+        ep_rews = WANDBMonitor.episode_rewards
+        ep_lens = WANDBMonitor.episode_lengths
 
         eps_rew_mean = self.safe(np.mean, ep_rews)
         eps_len_mean = self.safe(np.mean, ep_lens)
@@ -87,6 +90,14 @@ class WANDBMonitor(gym.Wrapper):
         best_ep  = self.safe(np.max, ep_rews)
         worst_ep = self.safe(np.min, ep_rews)
 
+        headings = defaultdict(list)
+        for key, value in self.name_to_value.items():
+            heading = "NoHeading"
+            if "/" in key:
+                heading, name = key.split("/")
+            headings[heading].append((name, self.safe(np.mean, value)))
+        self.name_to_value.clear()
+
         print()
         print(self.run_name.center(70, "-"))
         print("|", "|".rjust(68))
@@ -95,6 +106,10 @@ class WANDBMonitor(gym.Wrapper):
         print("| Best and Worst Ep".ljust(30), "|", f"{best_ep:.3f}  |  {worst_ep:.3f}".ljust(35), "|")
         print("|", "|".rjust(68))
         print("| Biggest and Smallest Ob".ljust(30), "|", f"{self.max_obs:.3f} | {self.min_obs:.3f}".ljust(35), "|")
+        for heading in headings:
+            print("|", "|".rjust(68))
+            for name, value in headings[heading]:
+                 print(f"| {name}".ljust(30), "|", f"{value:.3f}".ljust(35), "|")
         print("|", "|".rjust(68))
         print("| FPS".ljust(30), "|", f"{fps}".ljust(35), "|")
         print("| Time".ljust(30), "|", f"{int(time_elapsed)}".ljust(35), "|")
@@ -167,6 +182,14 @@ class WANDBMonitor(gym.Wrapper):
         Closes the environment
         """
         super(Monitor, self).close()
+        WANDBMonitor.episode_rewards = []
+        WANDBMonitor.episode_lengths = []
+        WANDBMonitor.episode_times = []
+        WANDBMonitor.printer_acquired = False
+        WANDBMonitor.total_steps   = 0
+        WANDBMonitor.episode_count = 0
+        WANDBMonitor.WANDB_logger = None
+
         if self.file_handler is not None:
             self.file_handler.close()
 

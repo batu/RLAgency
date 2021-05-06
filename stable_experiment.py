@@ -12,13 +12,18 @@ import datetime
 
 from mlagents_envs.environment import UnityEnvironment
 from gym_unity.envs import UnityToGymWrapper, UnityToMultiGymWrapper 
-
+import wandb
 from rlnav.logging import WANDBMonitor
 from pathlib import Path
 
 algs = ["SAC", "PPO"]
 ens = ["Empty_8Agent_DF5", "Empty_1Agent_DF5"]
 treats = ["Dummy", "Multi"]
+
+algs = ["SAC"]
+ens = ["Empty_8Agent_DF5"]
+treats = ["Multi"]
+
 
 random.shuffle(algs)
 random.shuffle(ens)
@@ -37,10 +42,10 @@ for _ in range(100):
 
                 PROTOTYPE_NAME = "Benchmark"
                 PROJECT_NAME = f"{datetime.datetime.today().day}_{PROTOTYPE_NAME}" #Jump
-                ENV_NAME = "Ball3D_1Agent_1Frame"
+                ENV_NAME = en
                 TREATMENT_NAME = treat
 
-                base_bath = Path(fr"C:\Users\batua\Desktop\RLNav\NavigationEnvironments\{PROJECT_NAME}")
+                base_bath = Path(fr"C:\Users\batua\Desktop\RLNav\NavigationEnvironments\{PROTOTYPE_NAME}")
                 ENV_PATH = base_bath / fr"{ENV_NAME}\Env.exe"  
                 GROUP_NAME = f"{alg}_{ENV_NAME}_{TREATMENT_NAME}"
 
@@ -62,7 +67,7 @@ for _ in range(100):
                 print("Created env")
 
                 if alg == "SAC":
-                    model = SAC("MlpPolicy", env, verbose=2, learning_starts=10000)  
+                    model = SAC("MlpPolicy", env, verbose=2)  
                 elif alg == "PPO":
                     model = PPO("MlpPolicy", env, verbose=2, n_steps=256)
 
@@ -70,4 +75,5 @@ for _ in range(100):
                 print("Starting learning")
                 model.learn(total_timesteps=250000)
                 wandb.finish()
+                env.close()
                 print("Learning ended")
