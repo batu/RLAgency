@@ -25,7 +25,6 @@ class WANDBMonitor(gym.Wrapper):
     EXT = "monitor.csv"
 
     
-    rewards = [[]] 
     episode_rewards = []
     episode_lengths = []
     episode_times = []
@@ -48,13 +47,12 @@ class WANDBMonitor(gym.Wrapper):
         self.run_name = project + " " + group
         obs = env.reset()
         self.num_agents =  1 if np.array(obs).ndim == 1 else len(obs)  
-        WANDBMonitor.rewards *= self.num_agents
 
         self.log_frequency = 10000
         self.next_log_timestep = 0
         self.to_log = True
 
-        self.rewards = [[]] * self.num_agents
+        self.rewards = [list() for _ in range(self.num_agents)]
         self.episode_rewards = []
         self.episode_lengths = []
         self.episode_times = []
