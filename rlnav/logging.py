@@ -39,6 +39,14 @@ class WANDBMonitor(gym.Wrapper):
         group:str=None
     ):
         super(WANDBMonitor, self).__init__(env=env)
+        WANDBMonitor.episode_rewards = []
+        WANDBMonitor.episode_lengths = []
+        WANDBMonitor.episode_times = []
+        WANDBMonitor.printer_acquired = False
+        WANDBMonitor.total_steps   = 0
+        WANDBMonitor.episode_count = 0
+        WANDBMonitor.WANDB_logger = None
+
         self.t_start = time.time()
         wandb.init(project=project, group=group, config=config)
 
@@ -181,7 +189,7 @@ class WANDBMonitor(gym.Wrapper):
         """
         Closes the environment
         """
-        super(Monitor, self).close()
+        super(WANDBMonitor, self).close()
         WANDBMonitor.episode_rewards = []
         WANDBMonitor.episode_lengths = []
         WANDBMonitor.episode_times = []
