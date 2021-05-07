@@ -198,8 +198,6 @@ class WANDBMonitor(gym.Wrapper):
         WANDBMonitor.episode_count = 0
         WANDBMonitor.WANDB_logger = None
 
-        if self.file_handler is not None:
-            self.file_handler.close()
 
     def get_total_steps(self) -> int:
         """
