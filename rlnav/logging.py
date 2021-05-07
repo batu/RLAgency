@@ -22,9 +22,10 @@ class WANDBMonitor(gym.Wrapper):
         if extra parameters are needed at reset
     :param info_keywords: extra information to log, from the information return of env.step()
     """
-    episode_rewards = []
-    episode_lengths = []
-    episode_times = []
+    successes = deque([0 for _ in range(50)], 50)
+    episode_rewards = deque([], 50)
+    episode_lengths = deque([], 50)
+    episode_times = deque([], 50)
     printer_acquired = False
     total_steps   = 0
     episode_count = 0
@@ -35,22 +36,17 @@ class WANDBMonitor(gym.Wrapper):
         self,
         env: gym.Env,
         config: dict,
-        project: str,
-        group:str=None
+        prototype: str,
+        experiment:str=None,
+        treatment:str=None,
     ):
         super(WANDBMonitor, self).__init__(env=env)
-        WANDBMonitor.episode_rewards = []
-        WANDBMonitor.episode_lengths = []
-        WANDBMonitor.episode_times = []
-        WANDBMonitor.printer_acquired = False
-        WANDBMonitor.total_steps   = 0
-        WANDBMonitor.episode_count = 0
-        WANDBMonitor.WANDB_logger = None
+        self.reset_static_variables()
 
         self.t_start = time.time()
-        wandb.init(project=project, group=group, config=config)
+        wandb.init(project=prototype, group=experiment, name=treatment, config=config)
 
-        self.run_name = project + " " + group
+        self.run_name = prototype + " " + experiment + " " + treatment
         obs = env.reset()
         self.num_agents =  1 if np.array(obs).ndim == 1 else len(obs)  
 
@@ -60,12 +56,13 @@ class WANDBMonitor(gym.Wrapper):
 
         self.name_to_value = defaultdict(list)
         self.rewards = [list() for _ in range(self.num_agents)]
-        self.episode_rewards = deque([], 50)
-        self.episode_lengths = deque([], 50)
-        self.episode_times = []
+        self.actions = deque([], 1000)
 
         self.max_obs = -np.inf
         self.min_obs = np.inf
+
+        self.max_action = -np.inf
+        self.min_action = np.inf
 
         self.log_start_idx = 0
 
@@ -83,6 +80,15 @@ class WANDBMonitor(gym.Wrapper):
 
     def log_to_console(self):
         if not self.printer: return
+
+        mean_success_rate = self.safe(np.mean, WANDBMonitor.successes)
+        wandb.log({"_MeanTrainingSuccessRate":mean_success_rate},
+                          step=WANDBMonitor.total_steps)
+
+        actions = np.array(self.actions)
+        self.max_action = max(self.max_action, np.max(actions))
+        self.min_action = min(self.min_action, np.min(actions))
+        mean_actions, std_actions = np.mean(actions, axis=0),  np.std(actions, axis=0)
 
         time_elapsed = (time.time() - self.t_start)
         fps = int(self.total_steps / time_elapsed)
@@ -109,11 +115,16 @@ class WANDBMonitor(gym.Wrapper):
         print()
         print(self.run_name.center(70, "-"))
         print("|", "|".rjust(68))
+        print("| Last 50 Success Rate".ljust(30), "|", f"{mean_success_rate:.1%}".ljust(35), "|")
         print("| Reward Mean".ljust(30), "|", f"{eps_rew_mean:.3f}  ±  {eps_rew_std:.3f}".ljust(35), "|")
         print("| EpLen  Mean".ljust(30), "|", f"{eps_len_mean:.3f}  ±  {eps_len_std:.3f}".ljust(35), "|")
         print("| Best and Worst Ep".ljust(30), "|", f"{best_ep:.3f}  |  {worst_ep:.3f}".ljust(35), "|")
         print("|", "|".rjust(68))
-        print("| Biggest and Smallest Ob".ljust(30), "|", f"{self.max_obs:.3f} | {self.min_obs:.3f}".ljust(35), "|")
+        print("| Biggest and Smallest Ob".ljust(30), "|", f"{self.max_obs:.3f} ({self.max_obs_idx}) | {self.min_obs:.3f} ({self.min_obs_idx})".ljust(35), "|")
+        print("| Biggest and Smallest Act".ljust(30), "|", f"{self.max_action:.3f} | {self.min_action:.3f}".ljust(35), "|")
+        with np.printoptions(formatter={'float': '{: 0.3f}'.format}):
+            print("| Mean Act".ljust(30), "|", f"{mean_actions}".ljust(35), "|")
+            print("| Std Act".ljust(30), "|", f"{std_actions}".ljust(35), "|")
         for heading in headings:
             print("|", "|".rjust(68))
             for name, value in headings[heading]:
@@ -145,28 +156,44 @@ class WANDBMonitor(gym.Wrapper):
         :return: observation, reward, done, information
         """
         observations, rewards, dones, infos = self.env.step(action)
+        for act in action:
+            self.actions.append(act)
+
         if self.num_agents == 1:
             observations, rewards, dones, infos = [observations], [rewards], [dones], [infos]
 
         for idx, stepreturn in enumerate(zip(observations, rewards, dones, infos)):
             observation, reward, done, info = stepreturn
 
-            self.max_obs = max(np.max(observation), self.max_obs)
-            self.min_obs = min(np.min(observation), self.min_obs)
+            step_max_obs = np.max(observation)
+            if  step_max_obs > self.max_obs:
+                self.max_obs = step_max_obs
+                self.max_obs_idx = np.argmax(observation)
+
+            step_min_obs = np.min(observation)
+            if step_min_obs < self.min_obs:
+                self.min_obs = step_min_obs
+                self.min_obs_idx = np.argmin(observation)
+            
 
             self.rewards[idx].append(reward)
             if done:
+                self.successes.append(reward)
+                if reward != 0.0 and reward != 1.0:
+                    print(f"Final step reward is different than 1.0 or 0.0. Success calculations are wrong! The reward is: {reward}")
+
                 ep_rew = sum(self.rewards[idx])
                 ep_len = len(self.rewards[idx])
                 ep_info = {"r": round(ep_rew, 6), "l": ep_len, "t": round(time.time() - self.t_start, 6)}
                 WANDBMonitor.episode_rewards.append(ep_rew)
                 WANDBMonitor.episode_lengths.append(ep_len)
-                self.episode_times.append(time.time() - self.t_start)
+                WANDBMonitor.episode_times.append(time.time() - self.t_start)
 
                 WANDBMonitor.episode_count += 1
                 wandb.log({"episode_reward":ep_rew,
                           "episode_len":ep_len,
-                          "episode_time":ep_info["t"]},
+                          "episode_time":ep_info["t"],
+                          "episode_success":reward},
                           step=WANDBMonitor.total_steps)
                 self.rewards[idx].clear()
             WANDBMonitor.total_steps += 1
@@ -190,14 +217,17 @@ class WANDBMonitor(gym.Wrapper):
         Closes the environment
         """
         super(WANDBMonitor, self).close()
-        WANDBMonitor.episode_rewards = []
-        WANDBMonitor.episode_lengths = []
-        WANDBMonitor.episode_times = []
+        self.reset_static_variables()
+
+    def reset_static_variables(self):
+        WANDBMonitor.successes = deque([0 for _ in range(50)], 50)
+        WANDBMonitor.episode_rewards = deque([], 50)
+        WANDBMonitor.episode_lengths = deque([], 50)
+        WANDBMonitor.episode_times = deque([], 50)
         WANDBMonitor.printer_acquired = False
         WANDBMonitor.total_steps   = 0
         WANDBMonitor.episode_count = 0
         WANDBMonitor.WANDB_logger = None
-
 
     def get_total_steps(self) -> int:
         """

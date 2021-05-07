@@ -1,0 +1,28 @@
+--- 
+_init_setup_model: true
+batch_size: 64
+clip_range: 0.2
+clip_range_vf: null
+create_eval_env: false
+device: auto
+ent_coef: 0.0
+gae_lambda: 0.95
+gamma: 0.99
+learning_rate: 0.0003
+max_grad_norm: 0.5
+n_epochs: 10
+n_steps: 2048
+pi: 
+  - 64
+  - 64
+sde_sample_freq: -1
+seed: null
+target_kl: null
+tensorboard_log: null
+use_sde: false
+verbose: 0
+vf: 
+  - 64
+  - 64
+  - 64
+vf_coef: 0.5
