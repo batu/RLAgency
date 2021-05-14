@@ -7,8 +7,8 @@ clip_range: 0.2
 clip_range_vf: null
 create_eval_env: false
 device: auto
-ent_coef: 0.0
-gae_lambda: 0.95
+ent_coef: 0.01
+gae_lambda: 0.975
 gamma: 0.99
 max_grad_norm: 0.5
 n_epochs: 10

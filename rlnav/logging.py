@@ -11,6 +11,17 @@ from stable_baselines3.common.type_aliases import GymObs, GymStepReturn
 from collections import defaultdict, deque
 
 
+def test_model(env, model, test_count=1000, det=True):
+  results = []
+  obs = env.reset()
+  while len(results) < test_count:
+    actions, _ = model.predict(obs, deterministic=det)
+    obs, rews, dones, infos = env.step(actions)
+    for (done, rew) in zip(dones, rews):
+      if done:
+        results.append(rew)
+  return np.mean(results)  
+
 class WANDBMonitor(gym.Wrapper):
     """
     A monitor wrapper for Gym environments, it is used to know the episode reward, length, time and other data.
@@ -22,7 +33,7 @@ class WANDBMonitor(gym.Wrapper):
         if extra parameters are needed at reset
     :param info_keywords: extra information to log, from the information return of env.step()
     """
-    successes = deque([0 for _ in range(50)], 50)
+    successes = deque([0 for _ in range(250)], 250)
     episode_rewards = deque([], 50)
     episode_lengths = deque([], 50)
     episode_times = deque([], 50)
@@ -115,7 +126,7 @@ class WANDBMonitor(gym.Wrapper):
         print()
         print(self.run_name.center(70, "-"))
         print("|", "|".rjust(68))
-        print("| Last 50 Success Rate".ljust(30), "|", f"{mean_success_rate:.1%}".ljust(35), "|")
+        print("| Last 250 Success Rate".ljust(30), "|", f"{mean_success_rate:.1%}".ljust(35), "|")
         print("| Reward Mean".ljust(30), "|", f"{eps_rew_mean:.3f}  ±  {eps_rew_std:.3f}".ljust(35), "|")
         print("| EpLen  Mean".ljust(30), "|", f"{eps_len_mean:.3f}  ±  {eps_len_std:.3f}".ljust(35), "|")
         print("| Best and Worst Ep".ljust(30), "|", f"{best_ep:.3f}  |  {worst_ep:.3f}".ljust(35), "|")
@@ -220,7 +231,7 @@ class WANDBMonitor(gym.Wrapper):
         self.reset_static_variables()
 
     def reset_static_variables(self):
-        WANDBMonitor.successes = deque([0 for _ in range(50)], 50)
+        WANDBMonitor.successes = deque([0 for _ in range(250)], 250)
         WANDBMonitor.episode_rewards = deque([], 50)
         WANDBMonitor.episode_lengths = deque([], 50)
         WANDBMonitor.episode_times = deque([], 50)

@@ -2,11 +2,11 @@
 learning_rate: 0.0003
 buffer_size: 1000000
 learning_starts: 10000
-batch_size: 512
+batch_size: 1024
 tau: 0.005
 gamma: 0.99
-train_freq: 1
-gradient_steps: 1
+train_freq: 2
+gradient_steps: 2
 action_noise: null
 optimize_memory_usage: False
 ent_coef: "auto"
