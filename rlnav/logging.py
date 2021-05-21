@@ -189,8 +189,11 @@ class WANDBMonitor(gym.Wrapper):
 
             self.rewards[idx].append(reward)
             if done:
-                self.successes.append(reward)
-                if reward != 0.0 and reward != 1.0:
+                if reward == 1.0:
+                    self.successes.append(1.0)
+                elif reward == -1.0 or reward == 0.0:
+                    self.successes.append(0.0)
+                else:
                     print(f"Final step reward is different than 1.0 or 0.0. Success calculations are wrong! The reward is: {reward}")
 
                 ep_rew = sum(self.rewards[idx])
