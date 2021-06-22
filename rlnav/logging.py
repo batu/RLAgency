@@ -1,3 +1,4 @@
+from numpy.core.fromnumeric import mean
 import wandb
 import gym
 import numpy as np
@@ -9,6 +10,8 @@ import json
 from typing import List, Optional, Tuple, Union
 from stable_baselines3.common.type_aliases import GymObs, GymStepReturn
 from collections import defaultdict, deque
+import os
+from pathlib import Path
 
 
 def test_model(env, model, test_count=1000, det=True):
@@ -41,6 +44,8 @@ class WANDBMonitor(gym.Wrapper):
     total_steps   = 0
     episode_count = 0
     WANDB_logger = None
+    max_success_rate = 0
+    dirpath = ""
 
 
     def __init__(
@@ -53,6 +58,11 @@ class WANDBMonitor(gym.Wrapper):
     ):
         super(WANDBMonitor, self).__init__(env=env)
         self.reset_static_variables()
+
+
+        dirpath = Path(f"Results/{prototype}/{experiment}/{treatment}")
+        WANDBMonitor.dirpath = dirpath
+        os.makedirs(dirpath, exist_ok=True)
 
         self.t_start = time.time()
         wandb.init(project=prototype, group=experiment, name=treatment, config=config)
@@ -96,6 +106,7 @@ class WANDBMonitor(gym.Wrapper):
         wandb.log({"_MeanTrainingSuccessRate":mean_success_rate},
                           step=WANDBMonitor.total_steps)
 
+
         actions = np.array(self.actions)
         self.max_action = max(self.max_action, np.max(actions))
         self.min_action = min(self.min_action, np.min(actions))
@@ -126,7 +137,7 @@ class WANDBMonitor(gym.Wrapper):
         print()
         print(self.run_name.center(70, "-"))
         print("|", "|".rjust(68))
-        print("| Last 250 Success Rate".ljust(30), "|", f"{mean_success_rate:.1%}".ljust(35), "|")
+        print("| Last 250 Success Rate".ljust(30), "|", f"{mean_success_rate:.1%}", "|", f"Max:{WANDBMonitor.max_success_rate:.3%}".ljust(35), "|")
         print("| Reward Mean".ljust(30), "|", f"{eps_rew_mean:.3f}  ±  {eps_rew_std:.3f}".ljust(35), "|")
         print("| EpLen  Mean".ljust(30), "|", f"{eps_len_mean:.3f}  ±  {eps_len_std:.3f}".ljust(35), "|")
         print("| Best and Worst Ep".ljust(30), "|", f"{best_ep:.3f}  |  {worst_ep:.3f}".ljust(35), "|")
@@ -210,6 +221,11 @@ class WANDBMonitor(gym.Wrapper):
                           "episode_success":reward},
                           step=WANDBMonitor.total_steps)
                 self.rewards[idx].clear()
+
+            mean_success_rate = self.safe(np.mean, WANDBMonitor.successes)
+            
+
+            
             WANDBMonitor.total_steps += 1
             if WANDBMonitor.total_steps > self.next_log_timestep:
                 self.to_log = True
@@ -242,6 +258,7 @@ class WANDBMonitor(gym.Wrapper):
         WANDBMonitor.total_steps   = 0
         WANDBMonitor.episode_count = 0
         WANDBMonitor.WANDB_logger = None
+        WANDBMonitor.max_success_rate = 0
 
     def get_total_steps(self) -> int:
         """

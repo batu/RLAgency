@@ -21,48 +21,52 @@ class CustomNetwork(nn.Module):
         input_dim: int,
         output_dim: int,
         hidden_dim: int = 1024,
-        n_layers: int = 2,
-        squash_output: bool = False,
-    ):
+        squash_output: bool = False, ):
         super(CustomNetwork, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.squash_output = squash_output
         self.hidden_dim = hidden_dim
 
-        self.action_dim = 3
-        self.vector_end = 51
-        self.raycast_size = 7
+        self.action_dim = 3 
+        self.vector_end = 51 # index of where the vector observation ends in observation
+ 
+        self.raycast_size = 7 
         self.depthmask_end = self.vector_end + self.raycast_size * self.raycast_size
+ 
         self.occupancy_shape = (11, 3, 11)
+ 
         self.isCritic = output_dim > 0 
         
         self.model = self.create_model()
 
     def create_model(self):
 
-        conv2d_size = 64
+        conv2d_size = 32
         self.depthmask_layers = nn.Sequential(
             nn.Conv2d(in_channels=1, out_channels=conv2d_size, kernel_size=3, stride=1, padding=1), nn.ReLU(),
             nn.Conv2d(conv2d_size, conv2d_size, kernel_size=3, padding=1), nn.ReLU(),
             nn.MaxPool2d(7),
         ) 
 
-        self.occupancymask_layers = nn.Sequential(  
-            nn.Conv2d(in_channels=3, out_channels=conv2d_size, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(conv2d_size, conv2d_size, kernel_size=3, padding=1), nn.ReLU(),
-            nn.MaxPool2d(11),
-        ) 
+        conv3d_size = 32
+        self.occupancy_layers= nn.Sequential(
+            nn.Conv3d(in_channels=1, out_channels=conv3d_size, kernel_size=3, stride=1, padding=2), nn.ReLU(),
+            nn.Conv3d(conv3d_size, conv3d_size, kernel_size=3, padding=2), nn.ReLU(),
+            nn.MaxPool3d(kernel_size=(15,5,15)),
+        )
 
+        # If you are the critic your vector obs also involes the actions from the actor
         vector_input = self.vector_end + self.action_dim if self.isCritic else self.vector_end
         self.vector_layers = nn.Sequential(
             nn.Linear(vector_input, self.hidden_dim), nn.ReLU(),
         )
 
-        output = self.output_dim if self.isCritic else self.hidden_dim
+        # Whether the output 3 actions, or the hidden size (the mu and sigma used for SAC actor is created later, outside the scope of this class)
+        output_size = self.output_dim if self.isCritic else self.hidden_dim
         model_list =[
-            nn.Linear(self.hidden_dim + conv2d_size + conv2d_size, self.hidden_dim), nn.ReLU(),
-            nn.Linear(self.hidden_dim, output), nn.ReLU(),
+            nn.Linear(self.hidden_dim + conv3d_size + conv2d_size, self.hidden_dim), nn.ReLU(),
+            nn.Linear(self.hidden_dim, output_size), nn.ReLU(),
         ]
 
         if self.squash_output:
@@ -71,16 +75,18 @@ class CustomNetwork(nn.Module):
         self.combo_model = nn.Sequential(*model_list)
 
     def forward(self, input_tensor: th.Tensor) -> th.Tensor:
+        # Divide the incoming 1d observation into three parts, reshape it as necesarry.
+        # if it is the critic, append the actions (given as input) to the end of the vector obs
         vector_obs = th.cat((input_tensor[:, :self.vector_end], input_tensor[:, -self.action_dim:]),dim=1) if self.isCritic else input_tensor[:, :self.vector_end]
         depth_obs = input_tensor[:, self.vector_end:self.depthmask_end]
         occupancy_obs = input_tensor[:, self.depthmask_end: -self.action_dim]  if self.isCritic else input_tensor[:, self.depthmask_end:]
         
-        depth_output = th.squeeze(self.depthmask_layers(depth_obs.reshape(-1,1, self.raycast_size, self.raycast_size)))
-        oc_temp = occupancy_obs.reshape(-1, *self.occupancy_shape)
-        oc_2d = oc_temp.swapaxes(1, 2)
-        occupancy_output = th.squeeze(self.occupancymask_layers(oc_2d))
+        # Reshape to the correct size and pass it through the network.
+        depth_output = th.squeeze(self.depthmask_layers(depth_obs.reshape(-1, 1, self.raycast_size, self.raycast_size)))
+        occupancy_output = th.squeeze(self.occupancy_layers(occupancy_obs.reshape(-1, 1, *self.occupancy_shape)))
         vector_output = self.vector_layers(vector_obs)
         
+        # Get the combination and pass it through the last linear layers.
         combined_input = th.cat((vector_output, occupancy_output, depth_output), dim=1)
         output = self.combo_model(combined_input)
         return output
