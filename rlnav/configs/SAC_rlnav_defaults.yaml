@@ -1,57 +1,23 @@
 ---
-sac_config:
-  learning_rate: 0.0003
-  buffer_size: 1000000
-  learning_starts: 50000
-  batch_size: 512
-  tau: 0.005
-  gamma: 0.99
-  train_freq: 64
-  gradient_steps: 256
-  action_noise: null
-  optimize_memory_usage: False
-  ent_coef: "auto_0.25"
-  target_update_interval: 1
-  target_entropy: -150
-  use_sde: False
-  sde_sample_freq: -1
-  use_sde_at_warmup: False
-  tensorboard_log: null
-  create_eval_env: False
-  verbose: 0
-  seed: null
-  device: "cuda"
-  _init_setup_model: True
-
-network_config:
-  activation_fn: Relu
-  net_arch: 
-    pi: 
-      - 512
-      - 512
-      - 512 
-    qf:
-      - 1024
-      - 1024
-      - 1024
-
-observation_config:
-  decision_frequency : 10
-
-  occupancy_xz_len : 4
-  occupancy_y_len: 2
-
-  depthmap_raylen: 50
-  depthmap_raycount: 3
-  depthmap_rayseperation: 2
-
-  whisker_raycount: 8
-  whisker_verticalraycount: 2
-  whisker_raylen: 2
-  whisker_groundraylen: 0.5
-  whisker_groundrayseperation: 1
-
-environment_config:
-  time_scale : 4
-  env_count : 32
-  curriculum_length: 500000
+learning_rate: 0.0003
+buffer_size: 1000000
+learning_starts: 50000
+batch_size: 512
+tau: 0.005
+gamma: 0.99
+train_freq: 64
+gradient_steps: 256
+action_noise: null
+optimize_memory_usage: False
+ent_coef: "auto_0.25"
+target_update_interval: 1
+target_entropy: -150
+use_sde: False
+sde_sample_freq: -1
+use_sde_at_warmup: False
+tensorboard_log: null
+create_eval_env: False
+verbose: 0
+seed: null
+device: "cuda"
+_init_setup_model: True
