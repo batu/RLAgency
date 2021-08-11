@@ -1,8 +1,8 @@
 # %%
 from stable_baselines3 import PPO, SAC
 import torch
-loaded_model = PPO.load(r"C:\Users\batua\Desktop\RLNav\RLAgency\results\Jump\PPO_Occupancy\Occupancy93_8_LRcon-4_BS1024_GAE0.95_HU256\Jump_92.8%.zip")
-loaded_model = SAC.load(r"C:\Users\batua\Desktop\RLNav\RLAgency\results\JumpV3\Occupancy\BoxSize2_463\JumpV3_99.8%.zip")
+# loaded_model = PPO.load(r"C:\Users\batua\Desktop\RLNav\RLAgency\results\Jump\PPO_Occupancy\Occupancy93_8_LRcon-4_BS1024_GAE0.95_HU256\Jump_92.8%.zip")
+loaded_model = SAC.load(r"C:\Users\batua\Desktop\RLNav\RLAgency\results\MazeModel.zip")
 
 
 # %%
@@ -20,6 +20,7 @@ class PPOOnnxablePolicy(torch.nn.Module):
 class SACOnnxablePolicy(torch.nn.Module):
     def __init__(self,  actor):
         super(SACOnnxablePolicy, self).__init__()
+        
         # Removing the flatten layer because it can't be onnxed
         self.actor = torch.nn.Sequential(actor.latent_pi, actor.mu)
 
@@ -33,9 +34,9 @@ else:
 
 print(new_model)
 # %%
-dummy_input = torch.randn(1, 463)
+dummy_input = torch.randn(1, 505)
 loaded_model.policy.to("cpu")
-torch.onnx.export(new_model, dummy_input, "JumpV3_463_998.onnx", opset_version=9)
+torch.onnx.export(new_model, dummy_input, "MazeModel505.onnx", opset_version=9)
 
 
 # %%

@@ -15,6 +15,9 @@ from pathlib import Path
 
 
 def test_model(env, model, test_count=1000, det=True):
+  env_channel = env.envs[0].env_channel
+  env_channel.set_float_parameter("testing", 1)
+
   results = []
   obs = env.reset()
   while len(results) < test_count:
@@ -23,6 +26,7 @@ def test_model(env, model, test_count=1000, det=True):
     for (done, rew) in zip(dones, rews):
       if done:
         results.append(rew)
+  env_channel.set_float_parameter("testing", 0)
   return np.mean(results)  
 
 class WANDBMonitor(gym.Wrapper):
@@ -36,6 +40,8 @@ class WANDBMonitor(gym.Wrapper):
         if extra parameters are needed at reset
     :param info_keywords: extra information to log, from the information return of env.step()
     """
+    
+    test_results = []
     successes = deque([0 for _ in range(250)], 250)
     episode_rewards = deque([], 50)
     episode_lengths = deque([], 50)
@@ -59,6 +65,8 @@ class WANDBMonitor(gym.Wrapper):
         super(WANDBMonitor, self).__init__(env=env)
         self.reset_static_variables()
 
+        self.env_channel = env.env_channel
+        print(env)
 
         dirpath = Path(f"Results/{prototype}/{experiment}/{treatment}")
         WANDBMonitor.dirpath = dirpath
@@ -72,7 +80,11 @@ class WANDBMonitor(gym.Wrapper):
         self.num_agents =  1 if np.array(obs).ndim == 1 else len(obs)  
 
         self.log_frequency = 10000
+        self.test_frequency = 250000
         self.next_log_timestep = 0
+        self.next_test_timestep = 0
+        
+        self.testing = False
         self.to_log = True
 
         self.name_to_value = defaultdict(list)
@@ -207,6 +219,21 @@ class WANDBMonitor(gym.Wrapper):
                 else:
                     print(f"Final step reward is different than 1.0 or 0.0. Success calculations are wrong! The reward is: {reward}")
 
+                if self.testing:
+                    if reward == 1.0:
+                        WANDBMonitor.test_results.append(1.0)
+                    elif reward == -1.0 or reward == 0.0:
+                        WANDBMonitor.test_results.append(0.0)
+
+                    if len(WANDBMonitor.test_results) > 100:
+                        self.testing = False
+                        mean_test_success_rate = self.safe(np.mean, WANDBMonitor.test_results)
+                        wandb.log({"_SuccessRate":mean_test_success_rate},
+                                                step=WANDBMonitor.total_steps)
+                        self.env_channel.set_float_parameter("testing", 0)
+
+                    
+
                 ep_rew = sum(self.rewards[idx])
                 ep_len = len(self.rewards[idx])
                 ep_info = {"r": round(ep_rew, 6), "l": ep_len, "t": round(time.time() - self.t_start, 6)}
@@ -222,14 +249,17 @@ class WANDBMonitor(gym.Wrapper):
                           step=WANDBMonitor.total_steps)
                 self.rewards[idx].clear()
 
-            mean_success_rate = self.safe(np.mean, WANDBMonitor.successes)
-            
-
             
             WANDBMonitor.total_steps += 1
             if WANDBMonitor.total_steps > self.next_log_timestep:
                 self.to_log = True
                 self.next_log_timestep += self.log_frequency
+
+            if WANDBMonitor.total_steps > self.next_test_timestep:
+                self.testing = True
+                WANDBMonitor.test_results.clear()
+                self.env_channel.set_float_parameter("testing", 1)
+                self.next_test_timestep += self.test_frequency
         
         if self.to_log:
             self.log_to_console()
@@ -250,6 +280,7 @@ class WANDBMonitor(gym.Wrapper):
         self.reset_static_variables()
 
     def reset_static_variables(self):
+        WANDBMonitor.test_results = []
         WANDBMonitor.successes = deque([0 for _ in range(250)], 250)
         WANDBMonitor.episode_rewards = deque([], 50)
         WANDBMonitor.episode_lengths = deque([], 50)

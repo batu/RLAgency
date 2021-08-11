@@ -15,6 +15,45 @@ LOG_STD_MAX = 2
 LOG_STD_MIN = -20
 
 
+class TransformerNetwork(nn.Module):
+    def __init__(
+        self,
+        input_dim: int,
+        output_dim: int,
+        hidden_dim: int = 128,
+        squash_output: bool = False, ):
+        super(TransformerNetwork, self).__init__()
+
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.squash_output = squash_output
+        self.hidden_dim = hidden_dim
+        self.action_dim = 3 
+         
+        self.isCritic = output_dim > 0 
+        self.model = self.create_model()
+
+    def create_model(self):
+
+        self.transformer_layer = nn.TransformerEncoderLayer(d_model=self.input_dim, nhead=1, dim_feedforward=128, dropout=0)
+        output_size = self.output_dim if self.isCritic else self.hidden_dim
+        model_list =[
+            nn.Linear(self.input_dim, self.hidden_dim), nn.ReLU(),
+            nn.Linear(self.hidden_dim, output_size), nn.ReLU(),
+        ]
+        if self.squash_output:
+            model_list.append(nn.Tanh())
+
+        return nn.Sequential(*model_list)
+
+    def forward(self, input_tensor: th.Tensor) -> th.Tensor:
+        
+        input_tensor = th.unsqueeze(input_tensor, 1)
+        encoded = self.transformer_layer(input_tensor).squeeze()
+        output = self.model(encoded)
+        return output
+
+
 class CustomNetwork(nn.Module):
     def __init__(
         self,
@@ -155,7 +194,7 @@ class CustomActor(BasePolicy):
         self.clip_mean = clip_mean
 
         action_dim = get_action_dim(self.action_space)
-        self.latent_pi = CustomNetwork(features_dim, -1, net_arch[0])
+        self.latent_pi = TransformerNetwork(features_dim, -1, net_arch[0])
         last_layer_dim = net_arch[-1] if len(net_arch) > 0 else features_dim
 
         if self.use_sde:
@@ -284,7 +323,7 @@ class CustomContinuousCritic(BaseModel):
         self.n_critics = n_critics
         self.q_networks = []
         for idx in range(n_critics):
-            q_net = CustomNetwork(features_dim + action_dim, 1, net_arch[0])
+            q_net = TransformerNetwork(features_dim + action_dim, 1, net_arch[0])
             self.add_module(f"qf{idx}", q_net)
             self.q_networks.append(q_net)
 
