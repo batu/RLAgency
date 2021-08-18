@@ -84,6 +84,7 @@ class WANDBMonitor(gym.Wrapper):
         self.next_log_timestep = 0
         self.next_test_timestep = 0
         
+        self.test_count = 250
         self.testing = False
         self.to_log = True
 
@@ -212,25 +213,27 @@ class WANDBMonitor(gym.Wrapper):
 
             self.rewards[idx].append(reward)
             if done:
-                if reward == 1.0:
-                    self.successes.append(1.0)
-                elif reward == -1.0 or reward == 0.0:
-                    self.successes.append(0.0)
-                else:
-                    print(f"Final step reward is different than 1.0 or 0.0. Success calculations are wrong! The reward is: {reward}")
-
+                
                 if self.testing:
                     if reward == 1.0:
                         WANDBMonitor.test_results.append(1.0)
                     elif reward == -1.0 or reward == 0.0:
                         WANDBMonitor.test_results.append(0.0)
 
-                    if len(WANDBMonitor.test_results) > 100:
+                    if len(WANDBMonitor.test_results) > self.test_count:
                         self.testing = False
                         mean_test_success_rate = self.safe(np.mean, WANDBMonitor.test_results)
                         wandb.log({"_SuccessRate":mean_test_success_rate},
                                                 step=WANDBMonitor.total_steps)
                         self.env_channel.set_float_parameter("testing", 0)
+                else:
+                    if reward == 1.0:
+                        self.successes.append(1.0)
+                    elif reward == -1.0 or reward == 0.0:
+                        self.successes.append(0.0)
+                    else:
+                        print(f"Final step reward is different than 1.0 or 0.0. Success calculations are wrong! The reward is: {reward}")
+                        
 
                     
 
@@ -251,7 +254,7 @@ class WANDBMonitor(gym.Wrapper):
 
             
             WANDBMonitor.total_steps += 1
-            if WANDBMonitor.total_steps > self.next_log_timestep:
+            if WANDBMonitor.total_steps > self.next_log_timestep and not self.testing:
                 self.to_log = True
                 self.next_log_timestep += self.log_frequency
 

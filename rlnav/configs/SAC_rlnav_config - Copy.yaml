@@ -1,7 +1,7 @@
 sac_config:
   learning_rate: 0.0003
   buffer_size: 1000000
-  learning_starts: 50000
+  learning_starts: 250000
   batch_size: 512
   tau: 0.005
   gamma: 0.99
@@ -12,7 +12,7 @@ sac_config:
   ent_coef: "auto_0.25"
   target_update_interval: 1
   target_entropy: -150
-  use_sde: True
+  use_sde: False
   sde_sample_freq: -1
   use_sde_at_warmup: False
   tensorboard_log: null
@@ -26,17 +26,16 @@ network_config:
   activation_fn: Relu
   net_arch: 
     pi: 
-      - 512
-      - 512
+      - 256
+      - 256
     qf:
-      - 1024
-      - 1024
-      - 1024
+      - 512
+      - 512
 
 observation_config:
   decision_frequency : 10
 
-  occupancy_xz_len : 4
+  occupancy_xz_len : 3
   occupancy_y_len: 2
 
   depthmap_raylen: 50
@@ -52,7 +51,4 @@ observation_config:
 environment_config:
   time_scale : 2
   env_count : 32
-  curriculum_length: 10000000
-  
-  failed_episode_threshold: 0.5
-  failed_episode_start: 10000000
+  curriculum_length: 1200000

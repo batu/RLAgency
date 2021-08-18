@@ -6,13 +6,12 @@ from pathlib import Path
 import yaml
 import wandb
 
-activations = {"relu": th.nn.ReLU}
+activations = {"relu": th.nn.ReLU,
+               "tanh": th.nn.Tanh}
 
 
 
-def setup_configurations(config_path):
-    with open(Path(config_path), 'r') as f:
-        config = yaml.load(f, Loader=yaml.FullLoader)
+def setup_configurations(config):
 
     wandb.finish()
     wandb_config = {
@@ -22,6 +21,9 @@ def setup_configurations(config_path):
     network_config = configure_network(config, wandb_config)
     alg_config     = configure_algorithm(config, wandb_config)
     environment_channel, engine_channel = configure_unity(config, wandb_config)
+    
+    wandb_config.update(alg_config)
+    wandb_config.update(network_config)
 
     return wandb_config, network_config, alg_config, [environment_channel, engine_channel]
 

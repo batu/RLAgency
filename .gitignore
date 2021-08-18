@@ -136,3 +136,4 @@ MazeModel505.onnx
 originalnet
 temp.py
 thebestsestnetwork.py
+observation505.npy

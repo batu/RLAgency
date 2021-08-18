@@ -14,6 +14,7 @@ from rlnav.logging import WANDBMonitor, test_model
 from rlnav.utils import count_parameters
 from rlnav.configs.configurations import setup_configurations
 
+import yaml
 import torch as th
 
 PROTOTYPE_NAME = "Urban"
@@ -23,25 +24,27 @@ base_bath = Path(fr"C:\Users\batua\Desktop\RLNav\NavigationEnvironments\{PROTOTY
 
 hyperparameter_list_1   = [True, False]
 hyperparameter_list_2   = [8]
-environments = [(32, "Debug")] 
+environments = ["GitLFS_Commit"] 
 
 for _ in range(5):
   try:
     for ratio_adjust in hyperparameter_list_2:
       for SDE in hyperparameter_list_1:
-        for envcount, envname in environments:
+        for envname in environments:
           ENV_NAME = envname
           ENV_PATH = base_bath / fr"{ENV_NAME}\Env.exe"  
-          TREATMENT_NAME = f"{ENV_NAME}"
+          TREATMENT_NAME = f"{envname}_TS2"
           
-          wandb_config, network_config, alg_config, channels = setup_configurations("rlnav/configs/SAC_rlnav_config.yaml")
+          with open(Path("rlnav/configs/SAC_rlnav_config.yaml"), 'r') as f:
+            config = yaml.load(f, Loader=yaml.FullLoader)
+
+          wandb_config, network_config, alg_config, channels = setup_configurations(config)
           wandb_config["ENV_Name"]  = PROTOTYPE_NAME
           wandb_config["Treatment"] = TREATMENT_NAME
 
 
           def make_env():
             def _init():
-              # unity_env = UnityEnvironment(None)
               unity_env = UnityEnvironment(str(ENV_PATH), base_port=5000 + random.randint(0,5000), side_channels=channels)
               env = UnityToMultiGymWrapper(unity_env, env_channel=channels[0])
               env = WANDBMonitor(env, wandb_config, prototype=PROTOTYPE_NAME, experiment=EXPERIMENT_NAME, treatment=TREATMENT_NAME)
@@ -53,12 +56,11 @@ for _ in range(5):
           model = SAC("MlpPolicy", env, policy_kwargs=network_config, **alg_config)
           count_parameters(model.policy)
           
-          total_timesteps = 1_000_000
+          total_timesteps = 14_000_000
           model.learn(total_timesteps=total_timesteps)
           
           final_success_rate = test_model(env, model)
           wandb.log({"Final Success Rate":final_success_rate})
-
 
           try:
             model.save(WANDBMonitor.dirpath / f"Fin_{PROTOTYPE_NAME}_{final_success_rate:.1%}.zip")
