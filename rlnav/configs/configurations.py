@@ -48,8 +48,9 @@ def configure_unity(config, wandb_config) -> EnvironmentParametersChannel:
         environment_channel.set_float_parameter(key, value)
 
     env_config = config["environment_config"]
-    environment_channel.set_float_parameter("env_count", env_config["env_count"])
-    environment_channel.set_float_parameter("curriculum_length", env_config["curriculum_length"])
+    for key, value in env_config.items():
+        environment_channel.set_float_parameter(key, value)
+        
     engine_channel = EngineConfigurationChannel()
     engine_channel.set_configuration_parameters(time_scale = env_config["time_scale"])
     

@@ -56,7 +56,7 @@ for _ in range(5):
           model = SAC("MlpPolicy", env, policy_kwargs=network_config, **alg_config)
           count_parameters(model.policy)
           
-          total_timesteps = 14_000_000
+          total_timesteps = 15_000_000
           model.learn(total_timesteps=total_timesteps)
           
           final_success_rate = test_model(env, model)
