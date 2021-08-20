@@ -23,9 +23,14 @@ def test_model(env, model, test_count=1000, det=True):
   while len(results) < test_count:
     actions, _ = model.predict(obs, deterministic=det)
     obs, rews, dones, infos = env.step(actions)
-    for (done, rew) in zip(dones, rews):
+    for (done, reward) in zip(dones, rews):
       if done:
-        results.append(rew)
+        if reward == 1.0:
+            results.append(1.0)
+        elif reward == -1.0 or reward == 0.0:
+            results.append(0.0)
+        else:
+            print(f"Final step reward is different than 1.0 or 0.0. Success calculations are wrong! The reward is: {reward}")
   env_channel.set_float_parameter("testing", 0)
   return np.mean(results)  
 

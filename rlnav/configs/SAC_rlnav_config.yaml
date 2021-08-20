@@ -52,7 +52,7 @@ observation_config:
 environment_config:
   time_scale : 2
   env_count : 32
-  curriculum_length: 10000000
+  curriculum_length: 10_000_000
   
-  failed_episode_threshold: 0.5
-  failed_episode_start: 10000000
+  failed_episode_threshold: 0.0
+  failed_episode_start: 0

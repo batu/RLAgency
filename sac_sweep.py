@@ -18,13 +18,13 @@ import yaml
 import torch as th
 
 PROTOTYPE_NAME = "Urban"
-EXPERIMENT_NAME = f"Debug"
+EXPERIMENT_NAME = f"BugTest"
 PROTOTYPE_PATH_NAME = "Urban"
 base_bath = Path(fr"C:\Users\batua\Desktop\RLNav\NavigationEnvironments\{PROTOTYPE_PATH_NAME}")
 
 hyperparameter_list_1   = [True, False]
 hyperparameter_list_2   = [8]
-environments = ["GitLFS_Commit"] 
+environments = [ "FixV2_Server"]
 
 for _ in range(5):
   try:
@@ -33,7 +33,7 @@ for _ in range(5):
         for envname in environments:
           ENV_NAME = envname
           ENV_PATH = base_bath / fr"{ENV_NAME}\Env.exe"  
-          TREATMENT_NAME = f"{envname}_TS2"
+          TREATMENT_NAME = f"{envname}"
           
           with open(Path("rlnav/configs/SAC_rlnav_config.yaml"), 'r') as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
@@ -56,7 +56,7 @@ for _ in range(5):
           model = SAC("MlpPolicy", env, policy_kwargs=network_config, **alg_config)
           count_parameters(model.policy)
           
-          total_timesteps = 15_000_000
+          total_timesteps = 50_000
           model.learn(total_timesteps=total_timesteps)
           
           final_success_rate = test_model(env, model)
