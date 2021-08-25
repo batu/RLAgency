@@ -33,7 +33,7 @@ for _ in range(1):
     for envname in environments:
       ENV_NAME = envname
       ENV_PATH = base_bath / fr"{ENV_NAME}\Env.exe"  
-      TREATMENT_NAME = f"CustomNetwork"
+      TREATMENT_NAME = f"Profile"
       
       with open(Path("rlnav/configs/SAC_rlnav_config.yaml"), 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
@@ -44,6 +44,7 @@ for _ in range(1):
       wandb_config["ENV_Name"]  = PROTOTYPE_NAME
       wandb_config["Treatment"] = TREATMENT_NAME
       alg_config["learning_starts"] = 10
+      alg_config["gradient_steps"] = 1
 
       def make_env():
         def _init():
@@ -55,10 +56,10 @@ for _ in range(1):
 
       env = MultiAgentVecEnv(make_env())
       # model = SAC(SACCustomPolicy, env, policy_kwargs=network_config, **alg_config)
-      model = SAC("SACCustomPolicy", env, policy_kwargs=network_config, **alg_config)
+      model = SAC("MlpPolicy", env, policy_kwargs=network_config, **alg_config)
       count_parameters(model.policy)
       
-      total_timesteps = 10_000
+      total_timesteps = 50_000
       model.learn(total_timesteps=total_timesteps)
       
       # final_success_rate = test_model(env, model)
@@ -69,8 +70,8 @@ for _ in range(1):
       # except Exception as e:
       #   print("Couldn't save.")
       #   print(e)
-      wandb.finish()
       env.close()
+      wandb.finish()
   except UnityTimeOutException as e:
     print("Unity timed out.")
     print(e)

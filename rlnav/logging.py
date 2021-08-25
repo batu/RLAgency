@@ -6,6 +6,7 @@ import time
 
 import csv
 import json
+import glob
 
 from typing import List, Optional, Tuple, Union
 from stable_baselines3.common.type_aliases import GymObs, GymStepReturn
@@ -78,7 +79,7 @@ class WANDBMonitor(gym.Wrapper):
         os.makedirs(dirpath, exist_ok=True)
 
         self.t_start = time.time()
-        wandb.init(project=prototype, group=experiment, name=treatment, config=config)
+        self.run = wandb.init(project=prototype, group=experiment, name=treatment, config=config)
 
         self.run_name = prototype + " " + experiment + " " + treatment
         obs = env.reset()
@@ -284,6 +285,10 @@ class WANDBMonitor(gym.Wrapper):
         """
         Closes the environment
         """
+        profile_art = wandb.Artifact(f"trace-{wandb.run.id}", type="profile")
+        profile_art.add_file(glob.glob("wandb/latest-run/tbprofile/*.pt.trace.json")[0], "trace.pt.trace.json")
+        self.run.log_artifact(profile_art)
+
         super(WANDBMonitor, self).close()
         self.reset_static_variables()
 
