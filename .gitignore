@@ -137,3 +137,6 @@ originalnet
 temp.py
 thebestsestnetwork.py
 observation505.npy
+cpu.file
+*.file
+*.npy

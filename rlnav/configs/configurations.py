@@ -7,7 +7,12 @@ import yaml
 import wandb
 
 activations = {"relu": th.nn.ReLU,
-               "tanh": th.nn.Tanh}
+               "tanh": th.nn.Tanh,
+               "relu6": th.nn.ReLU6,
+               "leakyrelu": th.nn.LeakyReLU,
+               "selu":th.nn.SELU}
+
+
 
 
 

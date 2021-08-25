@@ -2,7 +2,7 @@
 from stable_baselines3 import PPO, SAC
 import torch
 # loaded_model = PPO.load(r"C:\Users\batua\Desktop\RLNav\RLAgency\results\Jump\PPO_Occupancy\Occupancy93_8_LRcon-4_BS1024_GAE0.95_HU256\Jump_92.8%.zip")
-loaded_model = SAC.load(r"C:\Users\batua\Desktop\RLNav\RLAgency\results\ExtraTrained2.zip")
+loaded_model = SAC.load(r"C:\Users\batua\Desktop\RLNav\RLAgency\results\Easybaseline958.zip")
 
 
 # %%
@@ -36,7 +36,7 @@ print(new_model)
 # %%
 dummy_input = torch.randn(1, 505)
 loaded_model.policy.to("cpu")
-torch.onnx.export(new_model, dummy_input, "Urban505_995.onnx", opset_version=9)
+torch.onnx.export(new_model, dummy_input, "EasyUrban505_958.onnx", opset_version=9)
 
 
 # %%
