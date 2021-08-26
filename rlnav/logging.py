@@ -286,7 +286,7 @@ class WANDBMonitor(gym.Wrapper):
         Closes the environment
         """
         profile_art = wandb.Artifact(f"trace-{wandb.run.id}", type="profile")
-        profile_art.add_file(glob.glob("wandb/latest-run/tbprofile/*.pt.trace.json")[0], "trace.pt.trace.json")
+        profile_art.add_file(glob.glob("wandb/latest-run/tbprofile/test.pt.trace.json")[0], "trace.pt.trace.json")
         self.run.log_artifact(profile_art)
 
         super(WANDBMonitor, self).close()

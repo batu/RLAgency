@@ -14,19 +14,19 @@ from rlnav.logging import WANDBMonitor, test_model
 from rlnav.utils import count_parameters
 from rlnav.configs.configurations import setup_configurations
 import os
-os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+# os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
 import yaml
 import torch as th
 
-PROTOTYPE_NAME = "Jump"
-EXPERIMENT_NAME = f"AlternativeArchitectures"
-PROTOTYPE_PATH_NAME = "1_Jump"
+PROTOTYPE_NAME = "Debug"
+EXPERIMENT_NAME = f"Debug"
+PROTOTYPE_PATH_NAME = "Debug"
 base_bath = Path(fr"C:\Users\batua\Desktop\RLNav\NavigationEnvironments\{PROTOTYPE_PATH_NAME}")
 
 hyperparameter_list_1   = [True, False]
 hyperparameter_list_2   = [8]
-environments = ["Baseline"]
+environments = ["NoMovement"]
 
 for _ in range(1):
   try:
@@ -43,8 +43,8 @@ for _ in range(1):
       wandb_config, network_config, alg_config, channels = setup_configurations(config)
       wandb_config["ENV_Name"]  = PROTOTYPE_NAME
       wandb_config["Treatment"] = TREATMENT_NAME
-      alg_config["learning_starts"] = 10
-      alg_config["gradient_steps"] = 1
+      alg_config["learning_starts"] = 5_000
+      alg_config["buffer_size"] = 10_000
 
       def make_env():
         def _init():
@@ -55,21 +55,13 @@ for _ in range(1):
         return _init
 
       env = MultiAgentVecEnv(make_env())
-      # model = SAC(SACCustomPolicy, env, policy_kwargs=network_config, **alg_config)
-      model = SAC("MlpPolicy", env, policy_kwargs=network_config, **alg_config)
+      model = SAC(SACCustomPolicy, env, policy_kwargs=network_config, **alg_config)
+      # model = SAC("MlpPolicy", env, policy_kwargs=network_config, **alg_config)
       count_parameters(model.policy)
       
-      total_timesteps = 50_000
+      total_timesteps = 30_000
       model.learn(total_timesteps=total_timesteps)
       
-      # final_success_rate = test_model(env, model)
-      # wandb.log({"Final Success Rate":final_success_rate})
-
-      # try:
-      #   model.save(WANDBMonitor.dirpath / f"Fin_{PROTOTYPE_NAME}_{final_success_rate:.1%}.zip")
-      # except Exception as e:
-      #   print("Couldn't save.")
-      #   print(e)
       env.close()
       wandb.finish()
   except UnityTimeOutException as e:

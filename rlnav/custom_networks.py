@@ -9,6 +9,7 @@ from stable_baselines3.common.preprocessing import get_action_dim
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.sac.policies import SACPolicy
 from torch import nn
+import numpy as np
 
 # CAP the standard deviation of the actor
 LOG_STD_MAX = 2
@@ -53,13 +54,27 @@ class TransformerNetwork(nn.Module):
         output = self.model(encoded)
         return output
 
+class MyGlobal3DMaxPoolLayer(nn.Module): #Is this the correct name?
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return th.mean(x, dim=(-3, -2,-1))
+
+class MyGlobal2DMaxPoolLayer(nn.Module): #Is this the correct name?
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return th.mean(x, dim =(-2,-1))
+
 
 class CustomNetwork3D(nn.Module):
     def __init__(
         self,
         input_dim: int,
         output_dim: int,
-        hidden_dim: int = 1024,
+        hidden_dim: int = 512,
         squash_output: bool = False, ):
         super(CustomNetwork3D, self).__init__()
 
@@ -82,35 +97,52 @@ class CustomNetwork3D(nn.Module):
         self.occupancy_shape = (9, 5, 9)
  
         self.is_critic = output_dim > 0 
+        self.dummy_input = th.rand((512, self.input_dim + self.action_dim)) if self.is_critic else th.rand((512, self.input_dim))
         
         self.model = self.create_model()
 
     def create_model(self):
+        _, dummy_depth_obs2d, dummy_occupancy_obs3d = self.preprocess(self.dummy_input)
 
-        conv2d_size = 32
-        self.depthmask_layers = nn.Sequential(
-            nn.Conv2d(in_channels=1, out_channels=conv2d_size, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(conv2d_size, conv2d_size, kernel_size=3, padding=1), nn.ReLU(),
-            nn.MaxPool2d(7),
-        ) 
+        def create_depthmap_layers(): 
+            conv2d_size = 64
+            depthmap_layers = nn.Sequential(
+                nn.Conv2d(in_channels=1, out_channels=conv2d_size, kernel_size=3, padding=2, stride=1), nn.ReLU(),
+                nn.Conv2d(conv2d_size,   out_channels=conv2d_size, kernel_size=3, padding=2, stride=1), nn.ReLU(),
+                MyGlobal2DMaxPoolLayer(),
+            ) 
+            return depthmap_layers
 
-        conv3d_size = 32
-        self.occupancy_layers= nn.Sequential(
-            nn.Conv3d(in_channels=1, out_channels=conv3d_size, kernel_size=3, stride=1, padding=2), nn.ReLU(),
-            nn.Conv3d(conv3d_size, conv3d_size, kernel_size=3, padding=2), nn.ReLU(),
-            nn.MaxPool3d(kernel_size=(9,5,9)),
-        )
+        def create_occupancy_layers():
+            conv3d_size = 32
+            occupancy_layers = nn.Sequential(
+                nn.Conv3d(in_channels=1, out_channels=conv3d_size, kernel_size=3, padding=2, stride=1), nn.ReLU(),
+                nn.Conv3d(conv3d_size,   out_channels=conv3d_size, kernel_size=3, padding=2, stride=1), nn.ReLU(),
+                MyGlobal3DMaxPoolLayer()
+            )
+            return occupancy_layers
 
-        # If you are the critic your vector obs also involes the actions from the actor
-        vector_input = self.vector_end + self.action_dim if self.is_critic else self.vector_end
-        self.vector_layers = nn.Sequential(
-            nn.Linear(vector_input, self.hidden_dim), nn.ReLU(),
-        )
+        def create_vector_layers():
+            # If you are the critic your vector obs also involes the actions from the actor
+            vector_input_size = self.vector_end + self.action_dim if self.is_critic else self.vector_end
+            vector_layers = nn.Sequential(
+                nn.Linear(vector_input_size, self.hidden_dim), nn.ReLU(),
+                nn.Linear(self.hidden_dim, self.hidden_dim), 
+            )
+            return vector_layers
+
+        self.depthmask_layers = create_depthmap_layers()
+        depthmask_output_shape = self.depthmask_layers(dummy_depth_obs2d).shape[-1]
+
+        self.occupancy_layers = create_occupancy_layers()
+        occupancy_output_shape = self.occupancy_layers(dummy_occupancy_obs3d).shape[-1]
+
+        self.vector_layers = create_vector_layers()
 
         # Whether the output 3 actions, or the hidden size (the mu and sigma used for SAC actor is created later, outside the scope of this class)
         output_size = self.output_dim if self.is_critic else self.hidden_dim
         model_list =[
-            nn.Linear(self.hidden_dim + conv3d_size + conv2d_size, self.hidden_dim), nn.ReLU(),
+            nn.Linear(self.hidden_dim + occupancy_output_shape + depthmask_output_shape, self.hidden_dim), nn.ReLU(),
             nn.Linear(self.hidden_dim, output_size), nn.ReLU(),
         ]
 
@@ -119,39 +151,38 @@ class CustomNetwork3D(nn.Module):
 
         self.combo_model = nn.Sequential(*model_list)
 
-    # def forward(self, input_tensor: th.Tensor) -> th.Tensor:
-    #     # Divide the incoming 1d observation into three parts, reshape it as necesarry.
-    #     # if it is the critic, append the actions (given as input) to the end of the vector obs
-    #     input_tensor = input_tensor.detach().cpu().numpy()
-    #     vector_obs = np.concatenate((input_tensor[:, :self.vector_end], input_tensor[:, -self.action_dim:]),axis=1) if self.is_critic else input_tensor[:, :self.vector_end]
-    #     depth_obs = input_tensor[:, self.vector_end:self.depthmask_end]
-    #     occupancy_obs = input_tensor[:, self.depthmask_end: -self.action_dim]  if self.is_critic else input_tensor[:, self.depthmask_end:]
+    def preprocess(self, input_tensor):
+        vector_obs = th.cat((input_tensor[:, :self.vector_end], input_tensor[:, -self.action_dim:]), dim=1) if self.is_critic else input_tensor[:, :self.vector_end]
+        depth_obs = input_tensor[:, self.vector_end:self.depthmask_end]
+        occupancy_obs = input_tensor[:, self.depthmask_end: self.occupancy_end]     
 
-    #     shaped_depth = th.tensor(depth_obs.reshape(-1, 1, self.depthmask_size, self.depthmask_size)).cuda()
-    #     shaped_occupancy = th.tensor(occupancy_obs.reshape(-1, 1, *self.occupancy_shape)).cuda()
-    #     vector_obs = th.tensor(vector_obs).cuda()
+        depth_obs2d = depth_obs.reshape(-1, 1, self.depthmask_size, self.depthmask_size)
+        occupancy_obs3d = occupancy_obs.reshape(-1, 1, *self.occupancy_shape)
 
-    #     # Reshape to the correct size and pass it through the network.
-    #     depth_output = th.squeeze(self.depthmask_layers(shaped_depth))
-    #     occupancy_output = th.squeeze(self.occupancy_layers(th.squeeze(shaped_occupancy)))
-    #     vector_output = self.vector_layers(vector_obs)
-        
-    #     # Get the combination and pass it through the last linear layers.
-    #     combined_input = th.cat((vector_output, occupancy_output, depth_output), dim=1)
-    #     output = self.combo_model(combined_input)
-    #     return output
+        return vector_obs, depth_obs2d, occupancy_obs3d
+
+    def preprocess_np(self, input_tensor):
+        input_array = input_tensor.detach().cpu().numpy()
+
+        vector_obs = np.concatenate((input_array[:, :self.vector_end], input_array[:, -self.action_dim:]), axis=1) if self.is_critic else input_array[:, :self.vector_end]
+        depth_obs = input_array[:, self.vector_end:self.depthmask_end]
+        occupancy_obs = input_array[:, self.depthmask_end: self.occupancy_end]     
+
+        depth_obs2d = depth_obs.reshape(-1, 1, self.depthmask_size, self.depthmask_size)
+        occupancy_obs3d = occupancy_obs.reshape(-1, 1, *self.occupancy_shape)
+
+        return th.tensor(vector_obs).cuda(), th.tensor(depth_obs2d).cuda(), th.tensor(occupancy_obs3d).cuda()
+
 
     def forward(self, input_tensor: th.Tensor) -> th.Tensor:
         # Divide the incoming 1d observation into three parts, reshape it as necesarry.
         # if it is the critic, append the actions (given as input) to the end of the vector obs
-        vector_obs = th.cat((input_tensor[:, :self.vector_end], input_tensor[:, -self.action_dim:]),dim=1) if self.is_critic else input_tensor[:, :self.vector_end]
-        depth_obs = input_tensor[:, self.vector_end:self.depthmask_end]
-        occupancy_obs = input_tensor[:, self.depthmask_end: -self.action_dim]  if self.is_critic else input_tensor[:, self.depthmask_end:]
+        vector_obs, depth_obs2d, occupancy_obs3d = self.preprocess(input_tensor)
         
         # Reshape to the correct size and pass it through the network.
-        depth_output = th.squeeze(self.depthmask_layers(depth_obs.reshape(-1, 1, self.depthmask_size, self.depthmask_size)))
-        occupancy_output = th.squeeze(self.occupancy_layers(occupancy_obs.reshape(-1, 1, *self.occupancy_shape)))
         vector_output = self.vector_layers(vector_obs)
+        depth_output = th.squeeze(self.depthmask_layers(depth_obs2d))
+        occupancy_output = th.squeeze(self.occupancy_layers(occupancy_obs3d))
         
         # Get the combination and pass it through the last linear layers.
         combined_input = th.cat((vector_output, occupancy_output, depth_output), dim=1)

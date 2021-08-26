@@ -25,17 +25,17 @@ sac_config:
 network_config:
   activation_fn: Relu
   net_arch: 
-    # pi: 
-    #   - 512
-    #   - 512
-    # qf:
-    #   - 1024
-    #   - 1024
-    #   - 1024
     pi: 
-      - 32
+      - 512
+      - 512
     qf:
-      - 32
+      - 1024
+      - 1024
+      - 1024
+    # pi: 
+    #   - 32
+    # qf:
+    #   - 32
 
 
 observation_config:
