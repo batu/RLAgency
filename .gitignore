@@ -140,3 +140,4 @@ observation505.npy
 cpu.file
 *.file
 *.npy
+*.onnx

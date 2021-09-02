@@ -1,7 +1,7 @@
 sac_config:
-  learning_rate: 0.0003
+  learning_rate: 0.0001
   buffer_size: 1000000
-  learning_starts: 50000
+  learning_starts: 500000
   batch_size: 512
   tau: 0.005
   gamma: 0.99
@@ -11,7 +11,7 @@ sac_config:
   optimize_memory_usage: False
   ent_coef: "auto_0.25"
   target_update_interval: 1
-  target_entropy: -150
+  target_entropy: -15
   use_sde: True
   sde_sample_freq: -1
   use_sde_at_warmup: False
@@ -26,20 +26,16 @@ network_config:
   activation_fn: Relu
   net_arch: 
     pi: 
-      - 512
-      - 512
+      - 768
+      - 768
     qf:
-      - 1024
-      - 1024
-      - 1024
-    # pi: 
-    #   - 32
-    # qf:
-    #   - 32
-
+      - 2048
+      - 2048
 
 observation_config:
   decision_frequency : 10
+  randomize_decision_freq : 0
+  randomization_percentage: 0 # Randomize movement
 
   occupancy_xz_len : 4
   occupancy_y_len: 2

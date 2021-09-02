@@ -15,7 +15,7 @@ import os
 from pathlib import Path
 
 
-def test_model(env, model, test_count=1000, det=True):
+def test_model(env, model, test_count=10000, det=True):
   env_channel = env.envs[0].env_channel
   env_channel.set_float_parameter("testing", 1)
 
@@ -60,6 +60,7 @@ class WANDBMonitor(gym.Wrapper):
     dirpath = ""
 
 
+
     def __init__(
         self,
         env: gym.Env,
@@ -74,6 +75,7 @@ class WANDBMonitor(gym.Wrapper):
         self.env_channel = env.env_channel
         print(env)
 
+        self.treatment = treatment
         dirpath = Path(f"Results/{prototype}/{experiment}/{treatment}")
         WANDBMonitor.dirpath = dirpath
         os.makedirs(dirpath, exist_ok=True)
@@ -90,7 +92,7 @@ class WANDBMonitor(gym.Wrapper):
         self.next_log_timestep = 0
         self.next_test_timestep = 0
         
-        self.test_count = 250
+        self.test_count = 500
         self.testing = False
         self.to_log = True
 
@@ -219,7 +221,6 @@ class WANDBMonitor(gym.Wrapper):
 
             self.rewards[idx].append(reward)
             if done:
-                
                 if self.testing:
                     if reward == 1.0:
                         WANDBMonitor.test_results.append(1.0)
@@ -232,6 +233,16 @@ class WANDBMonitor(gym.Wrapper):
                         wandb.log({"_SuccessRate":mean_test_success_rate},
                                                 step=WANDBMonitor.total_steps)
                         self.env_channel.set_float_parameter("testing", 0)
+
+                        if mean_test_success_rate > WANDBMonitor.max_success_rate:
+                            WANDBMonitor.max_success_rate = mean_test_success_rate
+                            try:
+                                WANDBMonitor.model.save(WANDBMonitor.dirpath / f"BestNetwork.zip")
+                            except Exception as e:
+                                print("Couldn't save.")
+                                print(e)
+
+                            
                 else:
                     if reward == 1.0:
                         self.successes.append(1.0)
@@ -285,9 +296,17 @@ class WANDBMonitor(gym.Wrapper):
         """
         Closes the environment
         """
-        profile_art = wandb.Artifact(f"trace-{wandb.run.id}", type="profile")
-        profile_art.add_file(glob.glob("wandb/latest-run/tbprofile/test.pt.trace.json")[0], "trace.pt.trace.json")
-        self.run.log_artifact(profile_art)
+        # profile_art = wandb.Artifact(f"trace-{wandb.run.id}", type="profile")
+        # profile_art.add_file(glob.glob("wandb/latest-run/tbprofile/test.pt.trace.json")[0], "trace.pt.trace.json")
+        # self.run.log_artifact(profile_art)
+
+        artifact = wandb.Artifact(self.treatment, type='model')
+        # Add a file to the artifact's contents
+        artifact.add_file(WANDBMonitor.dirpath / f"BestNetwork.zip")
+        artifact.add_file(WANDBMonitor.dirpath / f"FinalNetwork.zip")
+
+        # Save the artifact version to W&B and mark it as the output of this run
+        self.run.log_artifact(artifact)
 
         super(WANDBMonitor, self).close()
         self.reset_static_variables()

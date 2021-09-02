@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Optional, Tuple, Type
 
 import gym
 import torch as th
+from torch._C import device
 import torch.nn.functional as F
 from stable_baselines3.common.distributions import SquashedDiagGaussianDistribution, StateDependentNoiseDistribution
 from stable_baselines3.common.policies import BaseModel, BasePolicy, create_sde_features_extractor, register_policy
@@ -95,23 +96,48 @@ class CustomNetwork3D(nn.Module):
  
         self.depthmask_size = 7
         self.occupancy_shape = (9, 5, 9)
+
+        self.device = th.device('cuda') if th.cuda.is_available() else th.device('cpu')
  
         self.is_critic = output_dim > 0 
-        self.dummy_input = th.rand((512, self.input_dim + self.action_dim)) if self.is_critic else th.rand((512, self.input_dim))
+        self.dummy_input = th.rand((512, self.input_dim + self.action_dim)).cuda() if self.is_critic else th.rand((512, self.input_dim)).cuda()
         
-        self.model = self.create_model()
+        self.create_model()
+        # self.simple_model = self.create_simple_model()
+
+    def create_simple_model(self):
+        output_size = self.output_dim if self.is_critic else self.hidden_dim
+        model_list =[
+            nn.Linear(self.input_dim, self.hidden_dim), nn.ReLU(),
+            nn.Linear(self.hidden_dim , self.hidden_dim), nn.ReLU(),
+            nn.Linear(self.hidden_dim, output_size), nn.ReLU(),
+        ]
+
+        if self.squash_output:
+            model_list.append(nn.Tanh())
+
+        return nn.Sequential(*model_list)
 
     def create_model(self):
-        _, dummy_depth_obs2d, dummy_occupancy_obs3d = self.preprocess(self.dummy_input)
+        _, dummy_depth_obs2d, dummy_occupancy_obs3d = self.preprocess_2dnp(self.dummy_input)
 
         def create_depthmap_layers(): 
-            conv2d_size = 64
+            conv2d_size = 128
             depthmap_layers = nn.Sequential(
                 nn.Conv2d(in_channels=1, out_channels=conv2d_size, kernel_size=3, padding=2, stride=1), nn.ReLU(),
                 nn.Conv2d(conv2d_size,   out_channels=conv2d_size, kernel_size=3, padding=2, stride=1), nn.ReLU(),
                 MyGlobal2DMaxPoolLayer(),
             ) 
-            return depthmap_layers
+            return depthmap_layers.to(self.device)
+
+        def create_occupancy2D_layers():
+            conv2d_size = 128
+            occupancy_layers = nn.Sequential(
+                nn.Conv2d(in_channels=9, out_channels=conv2d_size, kernel_size=3, padding=2, stride=1), nn.ReLU(),
+                nn.Conv2d(conv2d_size,   out_channels=conv2d_size, kernel_size=3, padding=2, stride=1), nn.ReLU(),
+                MyGlobal2DMaxPoolLayer()
+            )
+            return occupancy_layers.to(self.device)
 
         def create_occupancy_layers():
             conv3d_size = 32
@@ -120,7 +146,7 @@ class CustomNetwork3D(nn.Module):
                 nn.Conv3d(conv3d_size,   out_channels=conv3d_size, kernel_size=3, padding=2, stride=1), nn.ReLU(),
                 MyGlobal3DMaxPoolLayer()
             )
-            return occupancy_layers
+            return occupancy_layers.to(self.device)
 
         def create_vector_layers():
             # If you are the critic your vector obs also involes the actions from the actor
@@ -129,12 +155,12 @@ class CustomNetwork3D(nn.Module):
                 nn.Linear(vector_input_size, self.hidden_dim), nn.ReLU(),
                 nn.Linear(self.hidden_dim, self.hidden_dim), 
             )
-            return vector_layers
+            return vector_layers.to(self.device)
 
         self.depthmask_layers = create_depthmap_layers()
         depthmask_output_shape = self.depthmask_layers(dummy_depth_obs2d).shape[-1]
 
-        self.occupancy_layers = create_occupancy_layers()
+        self.occupancy_layers = create_occupancy2D_layers()
         occupancy_output_shape = self.occupancy_layers(dummy_occupancy_obs3d).shape[-1]
 
         self.vector_layers = create_vector_layers()
@@ -149,7 +175,28 @@ class CustomNetwork3D(nn.Module):
         if self.squash_output:
             model_list.append(nn.Tanh())
 
+        th.backends.cudnn.benchmark = True
         self.combo_model = nn.Sequential(*model_list)
+
+    def dict_preprocess(self, input_dict):
+        vector_obs = input_dict["vector"]
+        depth_obs2d = input_dict["depthmap"]
+        occupancy_obs3d = input_dict["occupancy"]  
+
+        return vector_obs, depth_obs2d, occupancy_obs3d
+
+    def preprocess_2dnp(self, input_list):
+
+        input_array = th.squeeze(input_list).cuda()
+        vector_obs = input_array[:, :self.vector_end]
+        depth_obs = input_array[:,  self.vector_end:self.depthmask_end]
+        occupancy_obs = input_array[:, self.depthmask_end: self.occupancy_end]     
+
+        depth_obs2d = depth_obs.reshape(-1, 1, 7, 7)
+        occupancy_obs2d = occupancy_obs.reshape(-1,  9, 5, 9)
+
+        return vector_obs, depth_obs2d, occupancy_obs2d
+
 
     def preprocess(self, input_tensor):
         vector_obs = th.cat((input_tensor[:, :self.vector_end], input_tensor[:, -self.action_dim:]), dim=1) if self.is_critic else input_tensor[:, :self.vector_end]
@@ -177,7 +224,7 @@ class CustomNetwork3D(nn.Module):
     def forward(self, input_tensor: th.Tensor) -> th.Tensor:
         # Divide the incoming 1d observation into three parts, reshape it as necesarry.
         # if it is the critic, append the actions (given as input) to the end of the vector obs
-        vector_obs, depth_obs2d, occupancy_obs3d = self.preprocess(input_tensor)
+        vector_obs, depth_obs2d, occupancy_obs3d = self.dict_preprocess(input_tensor)
         
         # Reshape to the correct size and pass it through the network.
         vector_output = self.vector_layers(vector_obs)
@@ -187,6 +234,7 @@ class CustomNetwork3D(nn.Module):
         # Get the combination and pass it through the last linear layers.
         combined_input = th.cat((vector_output, occupancy_output, depth_output), dim=1)
         output = self.combo_model(combined_input)
+        # output = self.simple_model(input_tensor)
         return output
 
 
@@ -393,8 +441,12 @@ class CustomContinuousCritic(BaseModel):
         # when the features_extractor is shared with the actor
         with th.set_grad_enabled(not self.share_features_extractor):
             features = self.extract_features(obs)
-        qvalue_input = th.cat([features, actions], dim=1)
-        return tuple(q_net(qvalue_input) for q_net in self.q_networks)
+        
+        if isinstance(features, dict):
+            features["vector"] = th.cat([features["vector"], actions], dim=1)
+        else:
+            features = th.cat([features, actions], dim=1)
+        return tuple(q_net(features) for q_net in self.q_networks)
 
     def q1_forward(self, obs: th.Tensor, actions: th.Tensor) -> th.Tensor:
         """

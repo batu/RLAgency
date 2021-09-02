@@ -1,8 +1,33 @@
+import random
+import wandb
+from pathlib import Path
+
+from stable_baselines3 import SAC
+from stable_baselines3.common.vec_env import MultiAgentVecEnv
+from stable_baselines3.common.buffers import DictReplayBuffer
+
+from mlagents_envs.environment import UnityEnvironment
+from gym_unity.envs import UnityToMultiGymWrapper 
+from mlagents_envs.exception import UnityTimeOutException, UnityWorkerInUseException
+
+from rlnav.custom_networks import SACCustomPolicy
+from rlnav.logging import WANDBMonitor, test_model
+from rlnav.utils import count_parameters
+from rlnav.configs.configurations import setup_configurations
+from rlnav.wrappers import ConvDictWrapper
+
+import os
+os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+
+import yaml
+import torch as th
+
 # %%
 from stable_baselines3 import PPO, SAC
 import torch
 # loaded_model = PPO.load(r"C:\Users\batua\Desktop\RLNav\RLAgency\results\Jump\PPO_Occupancy\Occupancy93_8_LRcon-4_BS1024_GAE0.95_HU256\Jump_92.8%.zip")
-loaded_model = SAC.load(r"C:\Users\batua\Desktop\RLNav\RLAgency\results\Easybaseline958.zip")
+# loaded_model = SAC.load(r"C:\Users\batua\Desktop\RLNav\RLAgency\results\Easybaseline958.zip")
+loaded_model = SAC.load(r"C:\Users\batua\Desktop\RLNav\RLAgency\Results\Urban\LongrunFixed\LongLocal\BestNetwork.zip")
 
 
 # %%
@@ -32,11 +57,41 @@ if isinstance(loaded_model, PPO):
 else:
     new_model = SACOnnxablePolicy(loaded_model.policy.actor)
 
-print(new_model)
-# %%
 dummy_input = torch.randn(1, 505)
 loaded_model.policy.to("cpu")
-torch.onnx.export(new_model, dummy_input, "EasyUrban505_958.onnx", opset_version=9)
+torch.onnx.export(new_model, dummy_input, "EasyUrban505_984.onnx", opset_version=9)
+print(new_model)
+
+
+if False:
+    PROTOTYPE_NAME = "Urban"
+    EXPERIMENT_NAME = f"Longrun"
+    PROTOTYPE_PATH_NAME = "Urban"
+    base_bath = Path(fr"C:\Users\batua\Desktop\RLNav\NavigationEnvironments\{PROTOTYPE_PATH_NAME}")
+
+    ENV_NAME = "EasyBaseline"
+    ENV_PATH = base_bath / fr"{ENV_NAME}\Env.exe"  
+    TREATMENT_NAME = f"LongLocal"
+        
+    with open(Path("rlnav/configs/SAC_rlnav_config.yaml"), 'r') as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+
+    wandb_config, network_config, alg_config, channels = setup_configurations(config)
+    def make_env():
+        
+        def _init():
+          unity_env = UnityEnvironment(str(ENV_PATH), base_port=5000 + random.randint(0,5000), side_channels=channels)
+          env = UnityToMultiGymWrapper(unity_env, env_channel=channels[0])
+          env = WANDBMonitor(env, wandb_config, prototype=PROTOTYPE_NAME, experiment=EXPERIMENT_NAME, treatment=TREATMENT_NAME)
+          return env
+        return _init
+
+    env = MultiAgentVecEnv(make_env())
+    final_success_rate = test_model(env, loaded_model)
+    print(final_success_rate)
+
+# %%
+
 
 
 # %%
