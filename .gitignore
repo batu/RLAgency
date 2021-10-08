@@ -131,3 +131,13 @@ rlnav/wandb_config.yaml
 wandb/
 results/
 tmp/monitor.csv
+data/
+MazeModel505.onnx
+originalnet
+temp.py
+thebestsestnetwork.py
+observation505.npy
+cpu.file
+*.file
+*.npy
+*.onnx
