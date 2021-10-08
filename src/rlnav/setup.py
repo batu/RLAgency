@@ -14,4 +14,4 @@ if __name__ == "__main__":
     #                          f'gym-unity @ file://{str(parent_dir / Path("ml-agents/gym-unity/"))}',
     #                          f'mlagents @ file://{str(parent_dir / Path("ml-agents/ml-agents/"))}' ]
 
-    setup(install_requires=[]])
+    setup(install_requires=[])
