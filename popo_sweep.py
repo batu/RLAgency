@@ -6,7 +6,7 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.monitor import Monitor, MonitorMulti
 from stable_baselines3.common.evaluation import evaluate_policy
-from rlnav.configs.configurations import setup_configurations
+from rlnav.configs.configurations import setup_configurations, get_config_dict
 
 from rlnav.custom_graphnetworks import GraphActorCriticPolicy
 from mlagents_envs.exception import UnityTimeOutException, UnityWorkerInUseException
@@ -53,9 +53,8 @@ for _ in range(100):
             for netarch, netname in network_structures:
               for ENV_NAME in environments: 
                 ENV_PATH = base_bath / fr"{ENV_NAME}\Env.exe"  
-                with open(Path(f"rlnav/configs/PPO_rlnav_defaults.yaml"), 'r') as f:
-                  config = yaml.load(f, Loader=yaml.FullLoader)
 
+                config = get_config_dict(PPO)
                 config["environment_config"]["env_count"] = 32
                 config["sac_config"]["batch_size"] = 256
                 config["sac_config"]["n_epochs"] = 3
