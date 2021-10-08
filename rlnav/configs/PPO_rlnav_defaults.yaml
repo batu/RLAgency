@@ -1,21 +1,73 @@
---- 
-_init_setup_model: true
-batch_size: 1024
-n_steps: 256
-learning_rate: 0.0003
-clip_range: 0.2
-clip_range_vf: null
-create_eval_env: false
-device: auto
-ent_coef: 0.02
-gae_lambda: 0.975
-gamma: 0.99
-max_grad_norm: 0.5
-n_epochs: 10
-sde_sample_freq: -1
-seed: null
-target_kl: null
-tensorboard_log: null
-use_sde: false
-verbose: 2
-vf_coef: 0.5
+sac_config:
+  _init_setup_model: true
+  batch_size: 1024
+  n_steps: 256
+  n_epochs: 10
+  learning_rate: 0.0003
+  clip_range: 0.2
+  clip_range_vf: null
+  create_eval_env: false
+  device: auto
+  ent_coef: 0.02
+  gae_lambda: 0.975
+  gamma: 0.99
+  max_grad_norm: 0.5
+  sde_sample_freq: -1
+  seed: null
+  target_kl: null
+  tensorboard_log: null
+  use_sde: false
+  verbose: 2
+  vf_coef: 0.5
+
+network_config:
+  activation_fn: Relu
+  net_arch: 
+    pi: 
+      - 512
+      - 512
+    vf:
+      - 512
+      - 512
+    # pi: 
+    #   - 768
+    #   - 768
+    # qf:
+    #   - 2048
+    #   - 2048
+
+observation_config:
+
+  usePBRS : 0 #true
+  useDense : 1 #true
+
+  decision_frequency : 10
+  randomize_decision_freq : 0
+  randomization_percentage: 0.1 # Randomize movement
+
+  use_rotations: 0 # false
+  use_absolute_positions: 1 #true
+
+  use_occupancy: 1 #true
+  occupancy_xz_len : 4
+  occupancy_y_len: 2
+
+  use_depthmap: 1 #true
+  depthmap_raylen: 50
+  depthmap_raycount: 3
+  depthmap_rayseperation: 2
+
+  use_whiskers: 1 #true 
+  whisker_raycount: 8
+  whisker_verticalraycount: 2
+  whisker_raylen: 2
+  whisker_groundraylen: 0.5
+  whisker_groundrayseperation: 1
+
+environment_config:
+  time_scale : 2
+  env_count : 32
+  curriculum_length: 15_000_000
+  
+  failed_episode_threshold: 0.0
+  failed_episode_start: 0

@@ -21,38 +21,50 @@ os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
 import yaml
 import torch as th
+import asyncio
 
-PROTOTYPE_NAME = "Urban"
-EXPERIMENT_NAME = f"LongrunFixed"
-PROTOTYPE_PATH_NAME = "Urban"
+PROTOTYPE_NAME = "Chubb"
+EXPERIMENT_NAME = f"SAC"
+PROTOTYPE_PATH_NAME = "Chubb"
 base_bath = Path(fr"C:\Users\batua\Desktop\RLNav\NavigationEnvironments\{PROTOTYPE_PATH_NAME}")
 
 
-environments = ["EasyBaseline"]
+environments = ["Baseline"]
 
 for _ in range(19):
   try:
     for envname in environments:
       ENV_NAME = envname
       ENV_PATH = base_bath / fr"{ENV_NAME}\Env.exe"  
-      TREATMENT_NAME = f"LongLocal"
+      TREATMENT_NAME = f"{ENV_NAME}"
       
       with open(Path("rlnav/configs/SAC_rlnav_config.yaml"), 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
+      config["environment_config"]["curriculum_length"] = 7_500_000
+      config["observation_config"]["randomization_percentage"] = 0.15
+      
 
       wandb_config, network_config, alg_config, channels = setup_configurations(config)
       wandb_config["ENV_Name"]  = PROTOTYPE_NAME
       wandb_config["Treatment"] = TREATMENT_NAME
 
-      # alg_config["replay_buffer_class"] = DictReplayBuffer
+      alg_config["gradient_steps"] = 128
+      alg_config["learning_rate"] = 5e-4
+      alg_config["learning_starts"] = 100_000
+      alg_config["buffer_size"] = 1000_000
+
+      network_config["net_arch"]["pi"] = [512]
+      network_config["net_arch"]["qf"] = [1024]
+
+      alg_config["replay_buffer_class"] = DictReplayBuffer
 
       def make_env():
         def _init():
           unity_env = UnityEnvironment(str(ENV_PATH), base_port=5000 + random.randint(0,5000), side_channels=channels)
           env = UnityToMultiGymWrapper(unity_env, env_channel=channels[0])
           env = WANDBMonitor(env, wandb_config, prototype=PROTOTYPE_NAME, experiment=EXPERIMENT_NAME, treatment=TREATMENT_NAME)
-          # env = ConvDictWrapper(env)
+          env = ConvDictWrapper(env)
           return env
         return _init
 

@@ -60,7 +60,6 @@ class WANDBMonitor(gym.Wrapper):
     dirpath = ""
 
 
-
     def __init__(
         self,
         env: gym.Env,
@@ -76,7 +75,7 @@ class WANDBMonitor(gym.Wrapper):
         print(env)
 
         self.treatment = treatment
-        dirpath = Path(f"Results/{prototype}/{experiment}/{treatment}")
+        dirpath = Path(f"../Results/{prototype}/{experiment}/{treatment}")
         WANDBMonitor.dirpath = dirpath
         os.makedirs(dirpath, exist_ok=True)
 
@@ -234,15 +233,21 @@ class WANDBMonitor(gym.Wrapper):
                                                 step=WANDBMonitor.total_steps)
                         self.env_channel.set_float_parameter("testing", 0)
 
-                        if mean_test_success_rate > WANDBMonitor.max_success_rate:
+                        if mean_test_success_rate >= WANDBMonitor.max_success_rate:
                             WANDBMonitor.max_success_rate = mean_test_success_rate
                             try:
-                                WANDBMonitor.model.save(WANDBMonitor.dirpath / f"BestNetwork.zip")
+                                model_name = f"BestNetwork{mean_test_success_rate:.2f}.zip"
+                                WANDBMonitor.model.save(WANDBMonitor.dirpath / f"{model_name}")
+                                artifact = wandb.Artifact(self.treatment, type='model')
+                                # Add a file to the artifact's contents
+                                artifact.add_file(WANDBMonitor.dirpath / f"{model_name}")
+                                # Save the artifact version to W&B and mark it as the output of this run
+                                self.run.log_artifact(artifact)
+
                             except Exception as e:
                                 print("Couldn't save.")
                                 print(e)
-
-                            
+               
                 else:
                     if reward == 1.0:
                         self.successes.append(1.0)
@@ -250,9 +255,7 @@ class WANDBMonitor(gym.Wrapper):
                         self.successes.append(0.0)
                     else:
                         print(f"Final step reward is different than 1.0 or 0.0. Success calculations are wrong! The reward is: {reward}")
-                        
-
-                    
+                         
 
                 ep_rew = sum(self.rewards[idx])
                 ep_len = len(self.rewards[idx])

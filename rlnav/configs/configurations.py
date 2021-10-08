@@ -36,8 +36,16 @@ def setup_configurations(config):
 def configure_network(config, wandb_config):
     neural_network_config = config["network_config"]
     wandb_config["Activation"] = neural_network_config["activation_fn"]
-    wandb_config["VF"]         = neural_network_config["net_arch"]["qf"]
-    wandb_config["PI"]         = neural_network_config["net_arch"]["pi"]
+    try:
+        wandb_config["VF"]         = neural_network_config["net_arch"]["qf"]
+        wandb_config["PI"]         = neural_network_config["net_arch"]["pi"]
+    except:
+        wandb_config["VF"]         = neural_network_config["net_arch"]["vf"]
+        wandb_config["PI"]         = neural_network_config["net_arch"]["pi"]
+        neural_network_config["net_arch"] = [{
+            "pi": neural_network_config["net_arch"]["pi"],
+            "vf": neural_network_config["net_arch"]["vf"],
+        }]
     neural_network_config["activation_fn"] = activations[neural_network_config["activation_fn"].lower()]
     return neural_network_config
 
@@ -58,7 +66,6 @@ def configure_unity(config, wandb_config) -> EnvironmentParametersChannel:
         
     engine_channel = EngineConfigurationChannel()
     engine_channel.set_configuration_parameters(time_scale = env_config["time_scale"])
-    
     
     wandb_config.update(observation_config)
     wandb_config.update(env_config)

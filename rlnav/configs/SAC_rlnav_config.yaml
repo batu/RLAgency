@@ -1,17 +1,17 @@
 sac_config:
   learning_rate: 0.0001
   buffer_size: 1000000
-  learning_starts: 500000
-  batch_size: 512
+  learning_starts: 50000
+  batch_size: 256
   tau: 0.005
   gamma: 0.99
   train_freq: 64
-  gradient_steps: 256
+  gradient_steps: 512
   action_noise: null
   optimize_memory_usage: False
   ent_coef: "auto_0.25"
   target_update_interval: 1
-  target_entropy: -15
+  target_entropy: -12
   use_sde: True
   sde_sample_freq: -1
   use_sde_at_warmup: False
@@ -19,31 +19,47 @@ sac_config:
   create_eval_env: False
   verbose: 0
   seed: null
-  device: "cuda"
+  device: "auto"
   _init_setup_model: True
 
 network_config:
   activation_fn: Relu
-  net_arch: 
+  net_arch:
     pi: 
-      - 768
-      - 768
+      - 512
+      - 512
     qf:
       - 2048
       - 2048
+    # pi: 
+    #   - 768
+    #   - 768
+    # qf:
+    #   - 2048
+    #   - 2048
 
 observation_config:
+
+  usePBRS : 1 #true
+  useDense : 1 #true
+
   decision_frequency : 10
   randomize_decision_freq : 0
   randomization_percentage: 0 # Randomize movement
 
+  use_rotations: 0 # false
+  use_absolute_positions: 1 #true
+
+  use_occupancy: 1 #true
   occupancy_xz_len : 4
   occupancy_y_len: 2
 
+  use_depthmap: 1 #true
   depthmap_raylen: 50
   depthmap_raycount: 3
   depthmap_rayseperation: 2
 
+  use_whiskers: 1 #true 
   whisker_raycount: 8
   whisker_verticalraycount: 2
   whisker_raylen: 2
@@ -53,7 +69,7 @@ observation_config:
 environment_config:
   time_scale : 2
   env_count : 32
-  curriculum_length: 10_000_000
+  curriculum_length: 7_500_000
   
   failed_episode_threshold: 0.0
   failed_episode_start: 0

@@ -122,7 +122,7 @@ class CustomNetwork3D(nn.Module):
         _, dummy_depth_obs2d, dummy_occupancy_obs3d = self.preprocess_2dnp(self.dummy_input)
 
         def create_depthmap_layers(): 
-            conv2d_size = 128
+            conv2d_size = 32
             depthmap_layers = nn.Sequential(
                 nn.Conv2d(in_channels=1, out_channels=conv2d_size, kernel_size=3, padding=2, stride=1), nn.ReLU(),
                 nn.Conv2d(conv2d_size,   out_channels=conv2d_size, kernel_size=3, padding=2, stride=1), nn.ReLU(),
@@ -131,7 +131,7 @@ class CustomNetwork3D(nn.Module):
             return depthmap_layers.to(self.device)
 
         def create_occupancy2D_layers():
-            conv2d_size = 128
+            conv2d_size = 32
             occupancy_layers = nn.Sequential(
                 nn.Conv2d(in_channels=9, out_channels=conv2d_size, kernel_size=3, padding=2, stride=1), nn.ReLU(),
                 nn.Conv2d(conv2d_size,   out_channels=conv2d_size, kernel_size=3, padding=2, stride=1), nn.ReLU(),
@@ -175,7 +175,7 @@ class CustomNetwork3D(nn.Module):
         if self.squash_output:
             model_list.append(nn.Tanh())
 
-        th.backends.cudnn.benchmark = True
+        # th.backends.cudnn.benchmark = True
         self.combo_model = nn.Sequential(*model_list)
 
     def dict_preprocess(self, input_dict):

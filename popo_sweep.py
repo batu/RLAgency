@@ -6,8 +6,12 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.monitor import Monitor, MonitorMulti
 from stable_baselines3.common.evaluation import evaluate_policy
+from rlnav.configs.configurations import setup_configurations
 
+from rlnav.custom_graphnetworks import GraphActorCriticPolicy
 from mlagents_envs.exception import UnityTimeOutException, UnityWorkerInUseException
+from rlnav.wrappers import GraphDictWrapper
+
 import torch as th
 
 import os, yaml
@@ -22,68 +26,91 @@ from rlnav.logging import WANDBMonitor, test_model
 from rlnav.schedules import linear_schedule
 from pathlib import Path
 
-PROTOTYPE_NAME = "SoloBuilding"
-EXPERIMENT_NAME = f"Baseline"
-base_bath = Path(fr"C:\Users\batua\Desktop\RLNav\NavigationEnvironments\{PROTOTYPE_NAME}")
+
+PROTOTYPE_PATH_NAME = "Urban"       # Sometimes for legacy reasons the path and name are seperate.
+PROTOTYPE_NAME      = "Graph"       # Whatever environment I am using
+EXPERIMENT_NAME     = f"GNN_SweepLocal"
+base_bath = Path(fr"C:\Users\batua\Desktop\RLNav\NavigationEnvironments\{PROTOTYPE_PATH_NAME}")
+
+environments = ["EasyBaseline"]
+
+embedding_sizes = [16, 64, 128]
+hidden_layers = [False, 3, 2]
+hidden_widths = [128, 512, 1024]
+
+random.shuffle(embedding_sizes)
+random.shuffle(hidden_layers)
+random.shuffle(hidden_widths)
+network_structures = [((dict(vf=[512, 512], pi=[512, 512]),), "Seperate512")]
 
 
-environments = ["Baseline505"]
-
-random.shuffle(environments)
-ts = 5
 for _ in range(100):
   try:
-    for ENV_NAME in environments: 
-      ENV_PATH = base_bath / fr"{ENV_NAME}\Env.exe"  
-      with open(Path(f"rlnav/configs/PPO_rlnav_defaults.yaml"), 'r') as f:
-        alg_config = yaml.load(f, Loader=yaml.FullLoader)
+    for env_count in embedding_sizes:
+      for embedding_size in embedding_sizes:
+        for width in hidden_widths:
+          for hidden_layer in hidden_layers:
+            for netarch, netname in network_structures:
+              for ENV_NAME in environments: 
+                ENV_PATH = base_bath / fr"{ENV_NAME}\Env.exe"  
+                with open(Path(f"rlnav/configs/PPO_rlnav_defaults.yaml"), 'r') as f:
+                  config = yaml.load(f, Loader=yaml.FullLoader)
 
-      TREATMENT_NAME = f"{ENV_NAME}_PPO"
-     
-      wandb.finish()
-      wandb_config = {
-          "ENV_Name":ENV_NAME,
-          "Treatment":TREATMENT_NAME,
-          "Algorithm": "PPO",
-          "Source":"Laptop",
-          "TimeScale":ts
-      }
+                config["environment_config"]["env_count"] = 32
+                config["sac_config"]["batch_size"] = 256
+                config["sac_config"]["n_epochs"] = 3
+                config["sac_config"]["learning_rate"] = linear_schedule(3e-4)
 
-      neural_network_config = dict(activation_fn=th.nn.ReLU, net_arch=[dict(pi=[512, 512], vf=[1024, 512, 256])])
-      wandb_config["Activation"] = neural_network_config["activation_fn"]
-      wandb_config["VF"] = neural_network_config["net_arch"][0]["vf"]
-      wandb_config["PI"] = neural_network_config["net_arch"][0]["pi"]
+                
+                wandb_config, network_config, alg_config, channels = setup_configurations(config)
 
-      alg_config["batch_size"] = 1024
-      wandb_config.update(alg_config)
+                netarch[0]["graph_hidden_layers_count"] = hidden_layer
+                netarch[0]["graph_hidden_layers_width"] = width
+                netarch[0]["graph_embedding_size"] = embedding_size
+                
+                network_config["net_arch"] = netarch
 
-      def make_env(rank, seed=0):
-        def _init():
-          channel = EngineConfigurationChannel()
-          unity_env = UnityEnvironment(str(ENV_PATH), base_port=5000 + rank, side_channels=[channel])
-          env = UnityToMultiGymWrapper(unity_env)
-          env = WANDBMonitor(env, wandb_config, prototype=f"{PROTOTYPE_NAME}", experiment=EXPERIMENT_NAME, treatment=TREATMENT_NAME)
-          channel.set_configuration_parameters(time_scale = ts)
-          return env
-        return _init
+                if hidden_layer:
+                  TREATMENT_NAME = f"GraphNN_GLayeres{hidden_layer}_GWidth{width}_Emb{embedding_size}"
+                  wandb_config["Graph"] = True
+                else:
+                  TREATMENT_NAME = f"Baseline"
+                  wandb_config["Graph"] = False
 
-      port_randomizer = random.randint(0,4000)
-      env = MultiAgentVecEnv(make_env(port_randomizer))
-      model = PPO("MlpPolicy", env, policy_kwargs=neural_network_config, **alg_config)
 
-      total_timesteps = 3_000_000
-      model.learn(total_timesteps=total_timesteps)
-      final_success_rate = test_model(env, model)
-      wandb.log({"Final Success Rate":final_success_rate})
-      try:
-        dirpath = Path(f"Results/{PROTOTYPE_NAME}/{EXPERIMENT_NAME}/{TREATMENT_NAME}")
-        os.makedirs(dirpath, exist_ok=True)
-        model.save(dirpath / f"{PROTOTYPE_NAME}_{final_success_rate:.1%}.zip")
-      except Exception as e:
-        print("Couldn't save.")
-        print(e)
-      wandb.finish()
-      env.close()
+                if hidden_layer:
+                  def make_env():
+                    def _init():
+                      unity_env = UnityEnvironment(str(ENV_PATH), base_port=5000 + random.randint(0,5000), side_channels=channels)
+                      env = UnityToMultiGymWrapper(unity_env, env_channel=channels[0])
+                      env = WANDBMonitor(env, wandb_config, prototype=PROTOTYPE_NAME, experiment=EXPERIMENT_NAME, treatment=TREATMENT_NAME)
+                      env = GraphDictWrapper(env)
+
+                      return env
+                    return _init
+
+                  env = MultiAgentVecEnv(make_env())
+                  model = PPO(GraphActorCriticPolicy, env, policy_kwargs=network_config, **alg_config)
+                else:
+                  def make_env():
+                    def _init():
+                      unity_env = UnityEnvironment(str(ENV_PATH), base_port=5000 + random.randint(0,5000), side_channels=channels)
+                      env = UnityToMultiGymWrapper(unity_env, env_channel=channels[0])
+                      env = WANDBMonitor(env, wandb_config, prototype=PROTOTYPE_NAME, experiment=EXPERIMENT_NAME, treatment=TREATMENT_NAME)
+                      return env
+                    return _init
+
+                  env = MultiAgentVecEnv(make_env())
+                  model = PPO("MlpPolicy", env, policy_kwargs=network_config, **alg_config)
+                
+                print(model.policy)
+                total_timesteps = 10_000_000
+                model.learn(total_timesteps=total_timesteps)
+                final_success_rate = test_model(env, model)
+                wandb.log({"Final Success Rate":final_success_rate})
+
+                wandb.finish()
+                env.close()
   except UnityTimeOutException as e:
     print("Unity timed out.")
     print(e)
