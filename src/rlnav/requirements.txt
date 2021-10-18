@@ -1,4 +1,4 @@
-dgl-cuda11.1>=0.7.1
+# dgl-cuda11.1>=0.7.1
 wandb>=0.10.27
 prettytable>=2.1.0
 -e ../stable-baselines3/

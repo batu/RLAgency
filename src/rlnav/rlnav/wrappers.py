@@ -1,4 +1,5 @@
-import itertools
+from dataclasses import dataclass
+
 from dgl.convert import graph
 import numpy as np
 from typing import Any, Dict, List, Tuple, Union
@@ -27,6 +28,96 @@ SLICE_DICT =  {
 
 from rlnav.scene_graphs import URBAN_SCENE_GRAPH_JSONSTR
 URBAN_SCENE_GRAPH = json.loads(URBAN_SCENE_GRAPH_JSONSTR)
+
+@dataclass
+class AllGraphNodes:
+    """Class for keeping track of features of a Graph Features."""
+    gameobjectIDs: np.array
+    typeIDs: np.array
+        
+    rel_agent_poss: np.array
+    rel_goal_poss: np.array
+    
+    abs_poss: np.array
+    abs_rots: np.array
+    abs_scales: np.array
+
+    loc_poss: np.array
+    loc_rots: np.array
+    loc_scales: np.array
+        
+    rel_agent_poss: np.array
+    rel_goal_poss: np.array
+        
+    def update_rel_goal_pos(self, goal_pos:np.array):
+        self.rel_goal_poss = goal_pos - self.abs_poss
+    
+    def update_rel_agent_pos(self, agent_pos:np.array):
+        self.rel_agent_poss = agent_pos - self.abs_poss
+        
+    def normalize(self):
+        def normalize(v):
+            return v / np.abs(v).max()
+        
+        self.gameobjectIDs = normalize(self.gameobjectIDs)
+        self.typeIDs = normalize(self.typeIDs)
+
+        self.rel_agent_poss = normalize( self.rel_agent_poss)
+        self.rel_goal_poss = normalize(self.rel_goal_poss)
+
+        self.abs_poss = normalize(self.abs_poss)
+        self.abs_rots = normalize(self.abs_rots)
+        self.abs_scales = normalize(self.abs_scales)
+
+        self.loc_poss = normalize(self.loc_poss)
+        self.loc_rots = normalize(self.loc_rots)
+        self.loc_scales = normalize(self.loc_scales)
+
+        self.rel_agent_poss = normalize(self.rel_agent_poss)
+        self.rel_goal_poss = normalize(self.rel_goal_poss)
+        
+        
+    def JsonToAllGraphNodes(JSON_list:list, normalize=True):
+        JSON_array = np.array(JSON_list)
+        agent_features = np.array(JSON_list[0])
+        goal_features  = np.array(JSON_list[1])
+
+        gameobjectIDs = JSON_array[:,0]
+        typeIDs = JSON_array[:,1]
+
+        abs_poss = np.array(JSON_array[:,2:5])
+        abs_rots = np.array(JSON_array[:,5:9])
+        abs_scales = np.array(JSON_array[:,9:12])
+
+        loc_poss = np.array(JSON_array[:,12:15])
+        loc_rots = np.array(JSON_array[:,15:19])
+        loc_scales = np.array(JSON_array[:,19:22])
+
+        agent_pos = agent_features[2:5]
+        goal_pos = goal_features[2:5]
+
+        rel_agent_poss = agent_pos - abs_poss  
+        rel_goal_poss  = goal_pos - abs_poss
+
+        allNodes= AllGraphNodes(gameobjectIDs=gameobjectIDs,
+                         typeIDs=typeIDs,
+
+                         abs_poss=abs_poss,
+                         abs_rots=abs_rots,
+                         abs_scales=abs_scales,
+
+                         loc_poss=loc_poss,
+                         loc_rots=loc_rots,
+                         loc_scales=loc_scales, 
+
+                         rel_agent_poss=rel_agent_poss,
+                         rel_goal_poss=rel_goal_poss)
+        
+        if normalize:
+            allNodes.normalize()
+            
+        return allNodes
+
 
 class GraphDictWrapper(gym.Wrapper):
     """
