@@ -141,3 +141,6 @@ cpu.file
 *.file
 *.npy
 *.onnx
+.vscode/
+*.ckpt
+Notebooks/lightning_logs/

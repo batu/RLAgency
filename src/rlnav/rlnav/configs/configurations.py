@@ -21,7 +21,7 @@ def get_config_dict(algorithm):
         with open(base_path / Path(f"PPO_rlnav_defaults.yaml"), 'r') as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
     elif algorithm == "SAC" or algorithm == SAC:
-        with open(base_path / Path(f"SAC_rlnav_defaults.yaml"), 'r') as f:
+        with open(base_path / Path(f"SAC_rlnav_config.yaml"), 'r') as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
     else:
         raise Exception(f'The arguments to get_config_dict should be "PPO" or "SAC" but {algorithm} was given.')

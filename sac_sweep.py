@@ -13,20 +13,22 @@ from mlagents_envs.exception import UnityTimeOutException, UnityWorkerInUseExcep
 from rlnav.custom_networks import SACCustomPolicy
 from rlnav.logging import WANDBMonitor, test_model
 from rlnav.utils import count_parameters
-from rlnav.configs.configurations import setup_configurations
-from rlnav.wrappers import ConvDictWrapper
+from rlnav.configs.configurations import get_config_dict, setup_configurations
+from rlnav.wrappers import AbsPosOnlyWrapper, ConvDictWrapper, GraphDictWrapper
 
 import os
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+is_local = os.name == "nt"
 
-import yaml
 import torch as th
-import asyncio
 
-PROTOTYPE_NAME = "Chubb"
-EXPERIMENT_NAME = f"SAC"
-PROTOTYPE_PATH_NAME = "Chubb"
-base_bath = Path(fr"C:\Users\batua\Desktop\RLNav\NavigationEnvironments\{PROTOTYPE_PATH_NAME}")
+PROTOTYPE_PATH_NAME = "Debug"       # Sometimes for legacy reasons the path and name are seperate.
+PROTOTYPE_NAME      = "Debug"       # Whatever environment I am using
+EXPERIMENT_NAME     = f"DataLeakFix"
+if is_local:
+  base_bath = Path(fr"C:\Users\batua\Desktop\RLNav\NavigationEnvironments\{PROTOTYPE_PATH_NAME}")
+else:
+  base_bath = Path(fr"/workspace/NavigationEnvironments/Docker/{PROTOTYPE_PATH_NAME}")
 
 
 environments = ["Baseline"]
@@ -35,36 +37,46 @@ for _ in range(19):
   try:
     for envname in environments:
       ENV_NAME = envname
-      ENV_PATH = base_bath / fr"{ENV_NAME}\Env.exe"  
+      if is_local:
+        ENV_PATH = base_bath / fr"{ENV_NAME}/Env.exe"  
+      else:
+        ENV_PATH = base_bath / fr"{ENV_NAME}/Env.x86_64" 
       TREATMENT_NAME = f"{ENV_NAME}"
       
-      with open(Path("rlnav/configs/SAC_rlnav_config.yaml"), 'r') as f:
-        config = yaml.load(f, Loader=yaml.FullLoader)
+      config = get_config_dict(SAC)
 
-      config["environment_config"]["curriculum_length"] = 7_500_000
-      config["observation_config"]["randomization_percentage"] = 0.15
+      config["environment_config"]["curriculum_length"] = 0
+      config["observation_config"]["randomization_percentage"] = 0
       
+      config["observation_config"]["use_occupancy"] = False
+      config["observation_config"]["use_whiskers"] = False
+      config["observation_config"]["use_depthmap"] = False
 
       wandb_config, network_config, alg_config, channels = setup_configurations(config)
       wandb_config["ENV_Name"]  = PROTOTYPE_NAME
       wandb_config["Treatment"] = TREATMENT_NAME
 
-      alg_config["gradient_steps"] = 128
+      alg_config["ent_coef"] = 0
+      alg_config["gradient_steps"] = 2
+      alg_config["train_freq"] = 1
+      alg_config["target_entropy"] = 0
       alg_config["learning_rate"] = 5e-4
       alg_config["learning_starts"] = 100_000
-      alg_config["buffer_size"] = 1000_000
+      alg_config["buffer_size"] = 500_000
 
-      network_config["net_arch"]["pi"] = [512]
-      network_config["net_arch"]["qf"] = [1024]
+      network_config["net_arch"]["pi"] = [128]
+      network_config["net_arch"]["qf"] = [128]
 
-      alg_config["replay_buffer_class"] = DictReplayBuffer
+      # alg_config["replay_buffer_class"] = DictReplayBuffer
 
       def make_env():
         def _init():
           unity_env = UnityEnvironment(str(ENV_PATH), base_port=5000 + random.randint(0,5000), side_channels=channels)
           env = UnityToMultiGymWrapper(unity_env, env_channel=channels[0])
+          env = AbsPosOnlyWrapper(env)
           env = WANDBMonitor(env, wandb_config, prototype=PROTOTYPE_NAME, experiment=EXPERIMENT_NAME, treatment=TREATMENT_NAME)
-          env = ConvDictWrapper(env)
+          env.next_test_timestep=10_000_000
+          # env = ConvDictWrapper(env)
           return env
         return _init
 
@@ -74,11 +86,12 @@ for _ in range(19):
       count_parameters(model.policy)
       WANDBMonitor.model = model
 
-      total_timesteps = 20_000_000
+      total_timesteps = 250_000
       model.learn(total_timesteps=total_timesteps)
     
 
       final_success_rate = test_model(env, model)
+      print("Final rate", final_success_rate)
       wandb.log({"Final Success Rate":final_success_rate})
 
       try:

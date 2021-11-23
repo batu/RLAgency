@@ -302,14 +302,16 @@ class WANDBMonitor(gym.Wrapper):
         # profile_art = wandb.Artifact(f"trace-{wandb.run.id}", type="profile")
         # profile_art.add_file(glob.glob("wandb/latest-run/tbprofile/test.pt.trace.json")[0], "trace.pt.trace.json")
         # self.run.log_artifact(profile_art)
+        try:
+            artifact = wandb.Artifact(self.treatment, type='model')
+            # Add a file to the artifact's contents
+            artifact.add_file(WANDBMonitor.dirpath / f"BestNetwork.zip")
+            artifact.add_file(WANDBMonitor.dirpath / f"FinalNetwork.zip")
 
-        artifact = wandb.Artifact(self.treatment, type='model')
-        # Add a file to the artifact's contents
-        artifact.add_file(WANDBMonitor.dirpath / f"BestNetwork.zip")
-        artifact.add_file(WANDBMonitor.dirpath / f"FinalNetwork.zip")
-
-        # Save the artifact version to W&B and mark it as the output of this run
-        self.run.log_artifact(artifact)
+            # Save the artifact version to W&B and mark it as the output of this run
+            self.run.log_artifact(artifact)
+        except:
+            print("Couldn't upload artifacts.")
 
         super(WANDBMonitor, self).close()
         self.reset_static_variables()
